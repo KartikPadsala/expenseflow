@@ -1,0 +1,21 @@
+{
+  "name": "@expenseflow/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:seed": "tsx src/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.11.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.11.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.2"
+  }
+}
