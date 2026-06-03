@@ -1,5 +1,7 @@
 import { SettlementsService } from '../settlements.service';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+
+const mockEventEmitter = { emit: jest.fn() };
 
 const mockPrisma = {
   settlement: {
@@ -7,7 +9,9 @@ const mockPrisma = {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
+    $transaction: jest.fn(),
   },
+  user: { findUnique: jest.fn().mockResolvedValue({ displayName: 'Test User' }) },
 };
 
 describe('SettlementsService', () => {
@@ -15,12 +19,12 @@ describe('SettlementsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SettlementsService(mockPrisma as any);
+    service = new SettlementsService(mockPrisma as any, mockEventEmitter as any);
   });
 
   describe('create', () => {
     it('creates a settlement with required fields', async () => {
-      const settlement = { id: 's1', payerId: 'u1', payeeId: 'u2', amount: 50, currency: 'USD', status: 'PENDING', method: 'CASH', createdAt: new Date() };
+      const settlement = { id: 's1', payerId: 'u1', payeeId: 'u2', amount: 50, currency: 'USD', status: 'PENDING', method: 'CASH', createdAt: new Date(), payer: {}, payee: {} };
       mockPrisma.settlement.create.mockResolvedValue(settlement);
 
       const result = await service.create('u1', { payeeId: 'u2', amount: 50, currency: 'USD' });
@@ -32,11 +36,16 @@ describe('SettlementsService', () => {
     });
 
     it('defaults method to CASH when not provided', async () => {
-      mockPrisma.settlement.create.mockResolvedValue({ id: 's1', method: 'CASH' });
+      mockPrisma.settlement.create.mockResolvedValue({ id: 's1', method: 'CASH', payer: {}, payee: {} });
       await service.create('u1', { payeeId: 'u2', amount: 25, currency: 'USD' });
       expect(mockPrisma.settlement.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ method: 'CASH' }) })
       );
+    });
+
+    it('throws BadRequestException when payee equals payer (self-settlement)', async () => {
+      await expect(service.create('u1', { payeeId: 'u1', amount: 50, currency: 'USD' }))
+        .rejects.toThrow(BadRequestException);
     });
   });
 
@@ -98,7 +107,7 @@ describe('SettlementsService', () => {
 
   describe('complete', () => {
     it('marks settlement as completed when called by payee', async () => {
-      const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
+      const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING', amount: 50, currency: 'USD' };
       mockPrisma.settlement.findUnique.mockResolvedValue(s);
       mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'COMPLETED' });
 
@@ -111,7 +120,7 @@ describe('SettlementsService', () => {
     });
 
     it('throws ForbiddenException when called by payer', async () => {
-      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2' });
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' });
       await expect(service.complete('s1', 'u1')).rejects.toThrow(ForbiddenException);
     });
 
@@ -119,11 +128,21 @@ describe('SettlementsService', () => {
       mockPrisma.settlement.findUnique.mockResolvedValue(null);
       await expect(service.complete('s1', 'u1')).rejects.toThrow(NotFoundException);
     });
+
+    it('throws ConflictException when settlement is already completed', async () => {
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'COMPLETED' });
+      await expect(service.complete('s1', 'u2')).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException when settlement is cancelled', async () => {
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'CANCELLED' });
+      await expect(service.complete('s1', 'u2')).rejects.toThrow(ConflictException);
+    });
   });
 
   describe('cancel', () => {
-    it('allows payer to cancel', async () => {
-      const s = { id: 's1', payerId: 'u1', payeeId: 'u2' };
+    it('allows payer to cancel a PENDING settlement', async () => {
+      const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
       mockPrisma.settlement.findUnique.mockResolvedValue(s);
       mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED' });
       await service.cancel('s1', 'u1');
@@ -132,8 +151,8 @@ describe('SettlementsService', () => {
       );
     });
 
-    it('allows payee to cancel', async () => {
-      const s = { id: 's1', payerId: 'u1', payeeId: 'u2' };
+    it('allows payee to cancel a PENDING settlement', async () => {
+      const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
       mockPrisma.settlement.findUnique.mockResolvedValue(s);
       mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED' });
       await service.cancel('s1', 'u2');
@@ -141,8 +160,33 @@ describe('SettlementsService', () => {
     });
 
     it('throws ForbiddenException for unrelated user', async () => {
-      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2' });
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' });
       await expect(service.cancel('s1', 'u3')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws ConflictException when settlement is already cancelled', async () => {
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'CANCELLED' });
+      await expect(service.cancel('s1', 'u1')).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException when trying to cancel a completed settlement', async () => {
+      mockPrisma.settlement.findUnique.mockResolvedValue({ id: 's1', payerId: 'u1', payeeId: 'u2', status: 'COMPLETED' });
+      await expect(service.cancel('s1', 'u1')).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('bulkCreate', () => {
+    it('throws BadRequestException for self-settlement', async () => {
+      await expect(
+        service.bulkCreate('u1', { groupId: 'g1', settlements: [{ payeeId: 'u1', amount: 50, currency: 'USD' }] })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ConflictException when PENDING settlement already exists for same pair', async () => {
+      mockPrisma.settlement.findMany.mockResolvedValue([{ payeeId: 'u2' }]);
+      await expect(
+        service.bulkCreate('u1', { groupId: 'g1', settlements: [{ payeeId: 'u2', amount: 50, currency: 'USD' }] })
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

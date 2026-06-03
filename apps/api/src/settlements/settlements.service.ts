@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSettlementDto, BulkSettleDto } from './dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -12,6 +12,27 @@ export class SettlementsService {
   ) {}
 
   async bulkCreate(payerId: string, dto: BulkSettleDto) {
+    // Guard: no self-settlement
+    if (dto.settlements.some((s) => s.payeeId === payerId)) {
+      throw new BadRequestException('Cannot create a settlement with yourself');
+    }
+
+    // Guard: no duplicate PENDING settlements for the same payer/payee/group
+    const existingPending = await this.prisma.settlement.findMany({
+      where: {
+        payerId,
+        payeeId: { in: dto.settlements.map((s) => s.payeeId) },
+        ...(dto.groupId ? { groupId: dto.groupId } : {}),
+        status: 'PENDING',
+      },
+      select: { payeeId: true },
+    });
+    if (existingPending.length > 0) {
+      throw new ConflictException(
+        `Pending settlements already exist for ${existingPending.length} recipient(s). Cancel them before creating new ones.`,
+      );
+    }
+
     return this.prisma.$transaction(
       dto.settlements.map((s) =>
         this.prisma.settlement.create({
@@ -33,6 +54,10 @@ export class SettlementsService {
   }
 
   async create(payerId: string, dto: CreateSettlementDto) {
+    if (dto.payeeId === payerId) {
+      throw new BadRequestException('Cannot create a settlement with yourself');
+    }
+
     const settlement = await this.prisma.settlement.create({
       data: {
         payerId,
@@ -102,6 +127,8 @@ export class SettlementsService {
     const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
     if (settlement.payeeId !== userId) throw new ForbiddenException('Only payee can mark as complete');
+    if (settlement.status === 'COMPLETED') throw new ConflictException('Settlement is already completed');
+    if (settlement.status === 'CANCELLED') throw new ConflictException('Cannot complete a cancelled settlement');
 
     const completed = await this.prisma.settlement.update({
       where: { id: settlementId },
@@ -128,6 +155,8 @@ export class SettlementsService {
     const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
     if (settlement.payerId !== userId && settlement.payeeId !== userId) throw new ForbiddenException();
+    if (settlement.status === 'CANCELLED') throw new ConflictException('Settlement is already cancelled');
+    if (settlement.status === 'COMPLETED') throw new ConflictException('Cannot cancel a completed settlement');
     return this.prisma.settlement.update({ where: { id: settlementId }, data: { status: 'CANCELLED' } });
   }
 }
