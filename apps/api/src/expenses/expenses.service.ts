@@ -17,6 +17,11 @@ export class ExpensesService {
   async create(userId: string, dto: CreateExpenseDto) {
     const { participants, ...expenseData } = dto;
 
+    // Validate all participants are group members when a groupId is specified
+    if (dto.groupId) {
+      await this.assertGroupMembership(dto.groupId, participants.map((p) => p.userId));
+    }
+
     const splitResults = calculateSplit({
       totalAmount: dto.amount,
       participantIds: participants.map((p) => p.userId),
@@ -176,6 +181,12 @@ export class ExpensesService {
 
     const { participants, ...expenseData } = dto;
 
+    // Validate all participants are group members when a groupId is set
+    const targetGroupId = expenseData.groupId !== undefined ? expenseData.groupId : expense.groupId;
+    if (targetGroupId) {
+      await this.assertGroupMembership(targetGroupId, participants.map((p) => p.userId));
+    }
+
     const splitResults = calculateSplit({
       totalAmount: dto.amount,
       participantIds: participants.map((p) => p.userId),
@@ -259,6 +270,7 @@ export class ExpensesService {
               ? false
               : (existingPaidMap.get(r.participantId)?.isSettled ?? false),
             sharePercent: r.sharePercent,
+            shares: r.shares ?? null,
           })),
         },
       },
@@ -288,6 +300,22 @@ export class ExpensesService {
     if (expense.createdById !== userId) {
       throw new ForbiddenException('Only the creator can delete this expense');
     }
+
+    // Cancel any PENDING settlements that were created against this expense's group/participants
+    // to prevent phantom credits when the underlying debt no longer exists.
+    const participantIds = expense.participants?.map((p: any) => p.userId) ?? [];
+    if (participantIds.length > 0) {
+      await this.prisma.settlement.updateMany({
+        where: {
+          status: 'PENDING',
+          payerId: expense.paidById,
+          payeeId: { in: participantIds.filter((id: string) => id !== expense.paidById) },
+          ...(expense.groupId ? { groupId: expense.groupId } : {}),
+        },
+        data: { status: 'CANCELLED' },
+      });
+    }
+
     await this.prisma.expense.update({ where: { id: expenseId }, data: { isDeleted: true } });
 
     this.eventEmitter.emit(
@@ -296,7 +324,7 @@ export class ExpensesService {
         expenseId,
         expense.description,
         userId,
-        expense.participants?.map((p: any) => p.userId) ?? [],
+        participantIds,
       ),
     );
 
@@ -321,5 +349,20 @@ export class ExpensesService {
         shares: (p as any).shares !== null ? Number((p as any).shares) : undefined,
       })),
     });
+  }
+
+  /** Throws BadRequestException if any userId is not a member of the given group. */
+  private async assertGroupMembership(groupId: string, userIds: string[]): Promise<void> {
+    const members = await this.prisma.groupMember.findMany({
+      where: { groupId },
+      select: { userId: true },
+    });
+    const memberSet = new Set(members.map((m) => m.userId));
+    const nonMembers = userIds.filter((id) => !memberSet.has(id));
+    if (nonMembers.length > 0) {
+      throw new BadRequestException(
+        `The following users are not members of this group: ${nonMembers.join(', ')}`,
+      );
+    }
   }
 }
