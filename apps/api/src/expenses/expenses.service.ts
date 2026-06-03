@@ -2,10 +2,14 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto, UpdateExpenseDto, ListExpensesDto } from './dto';
 import { calculateSplit } from '@expenseflow/shared';
+import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private exchangeRatesService: ExchangeRatesService,
+  ) {}
 
   async create(userId: string, dto: CreateExpenseDto) {
     const { participants, ...expenseData } = dto;
@@ -25,6 +29,28 @@ export class ExpensesService {
         : undefined,
     });
 
+    // Look up the payer's base currency for conversion
+    const payer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { defaultCurrency: true },
+    });
+    const userBaseCurrency = payer?.defaultCurrency ?? 'USD';
+
+    let convertedAmount: number | undefined;
+    let exchangeRateValue: number | undefined;
+    const expenseBaseCurrency = userBaseCurrency;
+
+    if (expenseData.currency && expenseData.currency !== userBaseCurrency) {
+      const result = await this.exchangeRatesService.convertAmount(
+        expenseData.amount,
+        expenseData.currency,
+        userBaseCurrency,
+        expenseData.date,
+      );
+      convertedAmount = result.convertedAmount;
+      exchangeRateValue = result.rate;
+    }
+
     return this.prisma.expense.create({
       data: {
         description: expenseData.description,
@@ -35,6 +61,11 @@ export class ExpensesService {
         notes: expenseData.notes,
         ...(expenseData.groupId ? { groupId: expenseData.groupId } : {}),
         ...(expenseData.categoryId ? { categoryId: expenseData.categoryId } : {}),
+        ...(convertedAmount !== undefined ? {
+          convertedAmount,
+          baseCurrency: expenseBaseCurrency,
+          exchangeRate: exchangeRateValue,
+        } : {}),
         paidById: userId,
         createdById: userId,
         participants: {
@@ -129,6 +160,27 @@ export class ExpensesService {
         : undefined,
     });
 
+    // Re-compute conversion if currency or amount changed
+    const payer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { defaultCurrency: true },
+    });
+    const userBaseCurrency = payer?.defaultCurrency ?? 'USD';
+
+    let convertedAmount: number | undefined;
+    let exchangeRateValue: number | undefined;
+
+    if (expenseData.currency && expenseData.currency !== userBaseCurrency) {
+      const result = await this.exchangeRatesService.convertAmount(
+        expenseData.amount,
+        expenseData.currency,
+        userBaseCurrency,
+        expenseData.date,
+      );
+      convertedAmount = result.convertedAmount;
+      exchangeRateValue = result.rate;
+    }
+
     await this.prisma.expenseParticipant.deleteMany({ where: { expenseId } });
 
     return this.prisma.expense.update({
@@ -142,6 +194,11 @@ export class ExpensesService {
         notes: expenseData.notes,
         ...(expenseData.groupId !== undefined ? { groupId: expenseData.groupId } : {}),
         ...(expenseData.categoryId !== undefined ? { categoryId: expenseData.categoryId } : {}),
+        ...(convertedAmount !== undefined ? {
+          convertedAmount,
+          baseCurrency: userBaseCurrency,
+          exchangeRate: exchangeRateValue,
+        } : { convertedAmount: null, baseCurrency: null, exchangeRate: null }),
         participants: {
           create: splitResults.map((r) => ({
             userId: r.participantId,

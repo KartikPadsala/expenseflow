@@ -36,8 +36,6 @@ export function formatCurrency(amount: number, currency: string, locale = 'en-US
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
     }).format(amount);
   } catch {
     return `${CURRENCIES[currency]?.symbol ?? currency}${amount.toFixed(2)}`;
@@ -50,4 +48,54 @@ export function getCurrencySymbol(currency: string): string {
 
 export function convertCurrency(amount: number, rate: number): number {
   return Math.round(amount * rate * 100) / 100;
+}
+
+/**
+ * Round a monetary value to the appropriate decimal places for a currency.
+ * JPY, KRW, etc. have 0 decimal places. Most others have 2.
+ */
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'CLP']);
+
+export function roundForCurrency(amount: number, currency: string): number {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase())) {
+    return Math.round(amount);
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+/**
+ * Format an amount with its original currency and optionally a converted amount.
+ * Example: "$12.50 (≈ €11.30)"
+ */
+export function formatWithConversion(
+  amount: number,
+  currency: string,
+  convertedAmount?: number | null,
+  baseCurrency?: string | null,
+  locale = 'en-US',
+): string {
+  const primary = formatCurrency(amount, currency, locale);
+  if (convertedAmount != null && baseCurrency && baseCurrency !== currency) {
+    const secondary = formatCurrency(convertedAmount, baseCurrency, locale);
+    return `${primary} (≈ ${secondary})`;
+  }
+  return primary;
+}
+
+/**
+ * Get display label for a currency: "USD ($) — US Dollar"
+ */
+export function getCurrencyLabel(currency: string): string {
+  const info = CURRENCIES[currency];
+  if (!info) return currency;
+  return `${currency} (${info.symbol}) — ${info.name}`;
+}
+
+/**
+ * Get short display label: "🇺🇸 USD"
+ */
+export function getCurrencyShortLabel(currency: string): string {
+  const info = CURRENCIES[currency];
+  if (!info) return currency;
+  return `${info.flag} ${currency}`;
 }

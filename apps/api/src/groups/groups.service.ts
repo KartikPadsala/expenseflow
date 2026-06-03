@@ -4,10 +4,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGroupDto, UpdateGroupDto, AddMemberDto, UpdateMemberRoleDto } from './dto';
 import { simplifyDebts, DebtTransaction } from '@expenseflow/shared';
+import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
 
 @Injectable()
 export class GroupsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private exchangeRatesService: ExchangeRatesService,
+  ) {}
 
   async create(userId: string, dto: CreateGroupDto) {
     return this.prisma.group.create({
@@ -89,7 +93,9 @@ export class GroupsService {
   }
 
   async getBalances(groupId: string, userId: string) {
-    await this.findOne(groupId, userId);
+    const group = await this.findOne(groupId, userId);
+    const groupCurrency = (group as any).currency ?? 'USD';
+
     const expenses = await this.prisma.expense.findMany({
       where: { groupId, isDeleted: false },
       include: { participants: true },
@@ -102,25 +108,56 @@ export class GroupsService {
     };
 
     for (const expense of expenses) {
+      const expenseCurrency = expense.currency;
+
       for (const participant of expense.participants) {
         if (participant.userId === expense.paidById) continue;
-        const owed = Number(participant.owedAmount) - Number(participant.paidAmount);
-        if (owed > 0.01) {
-          ensureEntry(participant.userId, expense.paidById);
-          const current = balanceMap.get(participant.userId)!.get(expense.paidById)!;
-          balanceMap.get(participant.userId)!.set(expense.paidById, current + owed);
+
+        let owed = Number(participant.owedAmount) - Number(participant.paidAmount);
+        if (owed <= 0.01) continue;
+
+        // Convert to group currency if different
+        if (expenseCurrency !== groupCurrency) {
+          if ((expense as any).exchangeRate && (expense as any).baseCurrency) {
+            // expense.exchangeRate is expenseCurrency→baseCurrency
+            if ((expense as any).baseCurrency === groupCurrency) {
+              owed = Math.round(owed * Number((expense as any).exchangeRate) * 100) / 100;
+            } else {
+              const { convertedAmount } = await this.exchangeRatesService.convertAmount(
+                owed, expenseCurrency, groupCurrency,
+                expense.date.toISOString().slice(0, 10),
+              );
+              owed = convertedAmount;
+            }
+          } else {
+            const { convertedAmount } = await this.exchangeRatesService.convertAmount(
+              owed, expenseCurrency, groupCurrency,
+              expense.date.toISOString().slice(0, 10),
+            );
+            owed = convertedAmount;
+          }
         }
+
+        ensureEntry(participant.userId, expense.paidById);
+        const current = balanceMap.get(participant.userId)!.get(expense.paidById)!;
+        balanceMap.get(participant.userId)!.set(expense.paidById, current + owed);
       }
     }
 
     const transactions: DebtTransaction[] = [];
     for (const [from, toMap] of balanceMap.entries()) {
       for (const [to, amount] of toMap.entries()) {
-        if (amount > 0.01) transactions.push({ from, to, amount });
+        if (amount > 0.01) {
+          transactions.push({ from, to, amount: Math.round(amount * 100) / 100 });
+        }
       }
     }
 
-    return { transactions, simplified: simplifyDebts(transactions) };
+    return {
+      transactions,
+      simplified: simplifyDebts(transactions),
+      currency: groupCurrency,
+    };
   }
 
   private requireMembership(group: { members: { userId: string }[] }, userId: string) {
