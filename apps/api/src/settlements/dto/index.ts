@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEnum, Min, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEnum, Min, Max, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -10,6 +10,7 @@ export class CreateSettlementDto {
   @ApiProperty()
   @IsNumber()
   @Min(0.01)
+  @Max(1_000_000_000)
   amount!: number;
 
   @ApiProperty({ default: 'USD' })
@@ -34,7 +35,7 @@ export class CreateSettlementDto {
 
 export class BulkSettleItemDto {
   @IsString() payeeId!: string;
-  @IsNumber() @Min(0.01) amount!: number;
+  @IsNumber() @Min(0.01) @Max(1_000_000_000) amount!: number;
   @IsString() currency!: string;
   @IsOptional() @IsString() method?: string;
 }
