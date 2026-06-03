@@ -173,11 +173,40 @@ export class GroupsService {
       }
     }
 
-    return {
-      transactions,
-      simplified: simplifyDebts(transactions),
-      currency: groupCurrency,
-    };
+    const simplified = simplifyDebts(transactions);
+
+    const userIds = new Set<string>();
+    for (const tx of simplified) { userIds.add(tx.from); userIds.add(tx.to); }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...userIds] } },
+      select: { id: true, displayName: true, avatarUrl: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const enrichedSimplified = simplified.map((tx) => ({
+      ...tx,
+      fromUser: userMap.get(tx.from),
+      toUser: userMap.get(tx.to),
+    }));
+
+    const memberNetMap = new Map<string, number>();
+    for (const tx of transactions) {
+      memberNetMap.set(tx.from, (memberNetMap.get(tx.from) ?? 0) - tx.amount);
+      memberNetMap.set(tx.to, (memberNetMap.get(tx.to) ?? 0) + tx.amount);
+    }
+
+    const groupMembers = await this.prisma.groupMember.findMany({
+      where: { groupId },
+      include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+    });
+
+    const balances = groupMembers.map((m) => ({
+      userId: m.userId,
+      displayName: m.user.displayName,
+      avatarUrl: m.user.avatarUrl,
+      amount: Math.round((memberNetMap.get(m.userId) ?? 0) * 100) / 100,
+    }));
+
+    return { transactions, simplified: enrichedSimplified, currency: groupCurrency, balances };
   }
 
   private requireMembership(group: { members: { userId: string }[] }, userId: string) {

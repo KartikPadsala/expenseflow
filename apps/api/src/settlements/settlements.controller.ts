@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SettlementsService } from './settlements.service';
-import { CreateSettlementDto } from './dto';
+import { CreateSettlementDto, BulkSettleDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -11,6 +11,11 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @Controller('settlements')
 export class SettlementsController {
   constructor(private readonly settlementsService: SettlementsService) {}
+
+  @Post('bulk')
+  bulkCreate(@CurrentUser() user: { id: string }, @Body() dto: BulkSettleDto) {
+    return this.settlementsService.bulkCreate(user.id, dto);
+  }
 
   @Post()
   create(@CurrentUser() user: { id: string }, @Body() dto: CreateSettlementDto) {

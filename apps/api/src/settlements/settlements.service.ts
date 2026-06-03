@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSettlementDto } from './dto';
+import { CreateSettlementDto, BulkSettleDto } from './dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents, SettlementRequestedEvent, SettlementCompletedEvent } from '../notifications/events/notification.events';
 
@@ -10,6 +10,27 @@ export class SettlementsService {
     private prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async bulkCreate(payerId: string, dto: BulkSettleDto) {
+    return this.prisma.$transaction(
+      dto.settlements.map((s) =>
+        this.prisma.settlement.create({
+          data: {
+            payerId,
+            payeeId: s.payeeId,
+            amount: s.amount,
+            currency: s.currency,
+            method: (s.method as any) || 'CASH',
+            groupId: dto.groupId,
+          },
+          include: {
+            payer: { select: { id: true, displayName: true, avatarUrl: true } },
+            payee: { select: { id: true, displayName: true, avatarUrl: true } },
+          },
+        }),
+      ),
+    );
+  }
 
   async create(payerId: string, dto: CreateSettlementDto) {
     const settlement = await this.prisma.settlement.create({
