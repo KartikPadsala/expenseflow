@@ -183,6 +183,12 @@ export class ExpensesService {
       customAmounts: dto.splitMethod !== 'EQUAL' && dto.splitMethod !== 'PERCENTAGE' && dto.splitMethod !== 'SHARES'
         ? Object.fromEntries(participants.map((p) => [p.userId, p.owedAmount || 0]))
         : undefined,
+      percentages: dto.splitMethod === 'PERCENTAGE'
+        ? Object.fromEntries(participants.map((p) => [p.userId, p.sharePercent || 0]))
+        : undefined,
+      shares: dto.splitMethod === 'SHARES'
+        ? Object.fromEntries(participants.map((p) => [p.userId, p.shares || 1]))
+        : undefined,
     });
 
     if (!validateSplit(splitResults, dto.amount)) {
@@ -311,6 +317,8 @@ export class ExpensesService {
       participants: original.participants.map((p) => ({
         userId: p.userId,
         owedAmount: Number(p.owedAmount),
+        sharePercent: p.sharePercent !== null ? Number(p.sharePercent) : undefined,
+        shares: (p as any).shares !== null ? Number((p as any).shares) : undefined,
       })),
     });
   }
