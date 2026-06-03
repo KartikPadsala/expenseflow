@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto, UpdateExpenseDto, ListExpensesDto } from './dto';
-import { calculateSplit } from '@expenseflow/shared';
+import { calculateSplit, validateSplit } from '@expenseflow/shared';
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationEvents, ExpenseCreatedEvent, ExpenseUpdatedEvent, ExpenseDeletedEvent } from '../notifications/events/notification.events';
@@ -31,6 +31,12 @@ export class ExpensesService {
         ? Object.fromEntries(participants.map((p) => [p.userId, p.shares || 1]))
         : undefined,
     });
+
+    if (!validateSplit(splitResults, dto.amount)) {
+      throw new BadRequestException(
+        `Split amounts (${splitResults.reduce((s, r) => s + r.owedAmount, 0).toFixed(2)}) do not sum to the total expense amount (${dto.amount.toFixed(2)})`,
+      );
+    }
 
     // Look up the payer's base currency for conversion
     const payer = await this.prisma.user.findUnique({
@@ -103,7 +109,9 @@ export class ExpensesService {
     );
 
     return expense;
-  }(userId: string, query: ListExpensesDto) {
+  }
+
+  async findAll(userId: string, query: ListExpensesDto) {
     const where: Record<string, unknown> = {
       isDeleted: false,
       OR: [{ paidById: userId }, { participants: { some: { userId } } }],
@@ -177,6 +185,23 @@ export class ExpensesService {
         : undefined,
     });
 
+    if (!validateSplit(splitResults, dto.amount)) {
+      throw new BadRequestException(
+        `Split amounts (${splitResults.reduce((s, r) => s + r.owedAmount, 0).toFixed(2)}) do not sum to the total expense amount (${dto.amount.toFixed(2)})`,
+      );
+    }
+
+    // Preserve existing paidAmount so editing metadata doesn't erase payment history
+    const existingParticipants = await this.prisma.expenseParticipant.findMany({
+      where: { expenseId },
+      select: { userId: true, paidAmount: true, isSettled: true },
+    });
+    const existingPaidMap = new Map(
+      existingParticipants.map((p) => [p.userId, { paidAmount: Number(p.paidAmount), isSettled: p.isSettled }]),
+    );
+
+    const newPaidById = (expenseData as any).paidById ?? expense.paidById;
+
     // Re-compute conversion if currency or amount changed
     const payer = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -220,7 +245,13 @@ export class ExpensesService {
           create: splitResults.map((r) => ({
             userId: r.participantId,
             owedAmount: r.owedAmount,
-            paidAmount: 0,
+            // Payer always gets paidAmount = owedAmount; preserve existing for others (capped at new owedAmount)
+            paidAmount: r.participantId === newPaidById
+              ? r.owedAmount
+              : Math.min(existingPaidMap.get(r.participantId)?.paidAmount ?? 0, r.owedAmount),
+            isSettled: r.participantId === newPaidById
+              ? false
+              : (existingPaidMap.get(r.participantId)?.isSettled ?? false),
             sharePercent: r.sharePercent,
           })),
         },
