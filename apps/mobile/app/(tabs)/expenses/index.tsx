@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react-native';
+import { Search, X, Plus } from 'lucide-react-native';
 import { useExpenses } from '../../../hooks/use-expenses';
 import { useCategories } from '../../../hooks/use-categories';
 import { Card } from '../../../components/ui/Card';
@@ -189,6 +189,15 @@ export default function ExpensesScreen() {
           ) : null
         }
       />
+
+      {/* FAB */}
+      <TouchableOpacity
+        style={fabStyles.fab}
+        onPress={() => router.push('/(tabs)/expenses/new')}
+        activeOpacity={0.85}
+      >
+        <Plus size={24} color="#ffffff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -227,4 +236,23 @@ const styles = StyleSheet.create({
   expenseGroup: { fontSize: 12, color: '#9ca3af', flex: 1 },
   expenseAmount: { fontSize: 16, fontWeight: '700', color: '#111827', flexShrink: 0 },
   loadingMore: { padding: 16 },
+});
+
+const fabStyles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 });

@@ -11,8 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, Calendar, Users, FileText } from 'lucide-react-native';
-import { useExpense, useDeleteExpense } from '../../../hooks/use-expenses';
+import { ArrowLeft, Trash2, Calendar, Users, FileText, Edit2, Copy } from 'lucide-react-native';
+import { useExpense, useDeleteExpense, useDuplicateExpense } from '../../../hooks/use-expenses';
 import { useAuthStore } from '../../../store/auth.store';
 import { Card } from '../../../components/ui/Card';
 import { Avatar } from '../../../components/ui/Avatar';
@@ -41,6 +41,7 @@ export default function ExpenseDetailScreen() {
 
   const expense = useExpense(id);
   const { mutate: deleteExpense, isPending: deleting } = useDeleteExpense();
+  const { mutate: duplicateExpense, isPending: duplicating } = useDuplicateExpense();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = useCallback(async () => {
@@ -65,6 +66,23 @@ export default function ExpenseDetailScreen() {
     ]);
   };
 
+  const handleDuplicate = () => {
+    Alert.alert('Duplicate Expense', 'Create a copy of this expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Duplicate',
+        onPress: () => {
+          duplicateExpense(id, {
+            onSuccess: (newExpense: any) => {
+              router.replace(`/(tabs)/expenses/${newExpense.id}`);
+            },
+            onError: (err: any) => Alert.alert('Error', err?.response?.data?.message ?? 'Could not duplicate expense'),
+          });
+        },
+      },
+    ]);
+  };
+
   if (expense.isLoading) return <LoadingState fullScreen />;
   if (expense.isError || !expense.data) {
     return <ErrorState message="Could not load expense" onRetry={expense.refetch} />;
@@ -81,11 +99,18 @@ export default function ExpenseDetailScreen() {
           <ArrowLeft size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>Expense Detail</Text>
-        {isOwner && (
-          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Trash2 size={18} color="#ef4444" />
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerActions}>
+          {isOwner && (
+            <TouchableOpacity onPress={() => router.push(`/(tabs)/expenses/edit/${id}`)} style={styles.headerBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Edit2 size={18} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+          {isOwner && (
+            <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Trash2 size={18} color="#ef4444" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -106,6 +131,20 @@ export default function ExpenseDetailScreen() {
             </Badge>
           )}
         </Card>
+
+        {/* Actions row */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleDuplicate}>
+            <Copy size={16} color="#6b7280" />
+            <Text style={styles.actionBtnText}>Duplicate</Text>
+          </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/(tabs)/expenses/edit/${id}`)}>
+              <Edit2 size={16} color="#6b7280" />
+              <Text style={styles.actionBtnText}>Edit</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Metadata */}
         <Card>
@@ -195,6 +234,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111827' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerBtn: { padding: 4 },
   deleteBtn: { padding: 4 },
   content: { padding: 16, paddingBottom: 40 },
   amountCard: { alignItems: 'center', paddingVertical: 28, marginBottom: 16 },
@@ -203,6 +244,9 @@ const styles = StyleSheet.create({
   expenseDescription: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },
   expenseAmount: { fontSize: 36, fontWeight: '800', color: '#111827', marginBottom: 10 },
   categoryBadge: {},
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e5e7eb' },
+  actionBtnText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   metaLabel: { fontSize: 13, color: '#9ca3af', width: 50 },
   metaValue: { flex: 1, fontSize: 14, color: '#111827', textAlign: 'right' },
