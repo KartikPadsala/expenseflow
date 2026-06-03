@@ -56,9 +56,14 @@
   },
   "jest": {
     "preset": "jest-expo",
-    "testMatch": ["**/__tests__/**/*.test.(ts|tsx)"],
+    "testMatch": [
+      "**/__tests__/**/*.test.(ts|tsx)"
+    ],
     "transformIgnorePatterns": [
-      "node_modules/(?!(.pnpm/[^/]*/node_modules/)?((jest-)?react-native|@react-native(-community)?|@react-native/.*|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|lucide-react-native))"
-    ]
+      "node_modules/(?!(.pnpm/[^/]*/node_modules/)?((jest-)?react-native|@react-native(-community)?|@react-native/.*|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|lucide-react-native|@expenseflow/.*))"
+    ],
+    "moduleNameMapper": {
+      "^@babel/runtime/(.*)": "<rootDir>/../../node_modules/.pnpm/@babel+runtime@7.29.7/node_modules/@babel/runtime/$1"
+    }
   }
 }

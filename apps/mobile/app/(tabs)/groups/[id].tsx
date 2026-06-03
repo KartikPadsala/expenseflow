@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, TrendingDown, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, TrendingDown, TrendingUp, HandCoins } from 'lucide-react-native';
 import { useGroup, useGroupBalances } from '../../../hooks/use-groups';
 import { useExpenses } from '../../../hooks/use-expenses';
 import { useAuthStore } from '../../../store/auth.store';
@@ -74,7 +74,13 @@ export default function GroupDetailScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{g.name}</Text>
           {g.type && <Text style={styles.headerSubtitle}>{g.type.charAt(0) + g.type.slice(1).toLowerCase()}</Text>}
         </View>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity
+          style={styles.settleUpBtn}
+          onPress={() => router.push('/settlements/new')}
+        >
+          <HandCoins size={16} color="#6366f1" />
+          <Text style={styles.settleUpText}>Settle Up</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -113,9 +119,25 @@ export default function GroupDetailScreen() {
                     <Text style={styles.settleAmount}>{formatCurrency(s.amount, currency)}</Text>
                   </View>
                 </View>
-                <Text style={styles.settleNames}>
-                  {s.from?.displayName} → {s.to?.displayName}
-                </Text>
+                <View style={styles.settleBottom}>
+                  <Text style={styles.settleNames}>
+                    {s.from?.displayName} → {s.to?.displayName}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.settleBtn}
+                    onPress={() => router.push({
+                      pathname: '/settlements/new',
+                      params: {
+                        payeeId: s.to,
+                        amount: s.amount.toString(),
+                        groupId: id,
+                        currency,
+                      },
+                    })}
+                  >
+                    <Text style={styles.settleBtnText}>Settle</Text>
+                  </TouchableOpacity>
+                </View>
               </Card>
             ))}
           </View>
@@ -220,7 +242,12 @@ const styles = StyleSheet.create({
   settleArrowText: { fontSize: 12, color: '#9ca3af' },
   settleAmountWrapper: { marginLeft: 'auto' },
   settleAmount: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  settleNames: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  settleBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  settleNames: { fontSize: 11, color: '#9ca3af' },
+  settleUpBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#6366f1' },
+  settleUpText: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
+  settleBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: '#ede9fe' },
+  settleBtnText: { fontSize: 12, fontWeight: '600', color: '#6366f1' },
   memberCard: { marginBottom: 8, padding: 12 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   memberInfo: { flex: 1 },
