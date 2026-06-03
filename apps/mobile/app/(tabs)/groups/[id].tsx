@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
+  Modal,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, TrendingDown, TrendingUp, HandCoins } from 'lucide-react-native';
+import { ArrowLeft, TrendingDown, TrendingUp, HandCoins, Settings, Users } from 'lucide-react-native';
 import { useGroup, useGroupBalances } from '../../../hooks/use-groups';
 import { useExpenses } from '../../../hooks/use-expenses';
 import { useAuthStore } from '../../../store/auth.store';
+import { useBulkSettle } from '../../../hooks/use-settlements';
 import { Card } from '../../../components/ui/Card';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Badge } from '../../../components/ui/Badge';
@@ -38,8 +42,11 @@ export default function GroupDetailScreen() {
   const group = useGroup(id);
   const balances = useGroupBalances(id);
   const expenses = useExpenses({ groupId: id, limit: 20 });
+  const bulkSettle = useBulkSettle();
 
   const [refreshing, setRefreshing] = React.useState(false);
+  const [settleModalOpen, setSettleModalOpen] = useState(false);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -62,6 +69,21 @@ export default function GroupDetailScreen() {
   const groupExpenses = expenses.data?.data ?? [];
 
   const myBalance = allBalances.find((b: any) => b.userId === user?.id);
+  const myDebts = simplified.filter((s: any) => s.from === user?.id);
+  const myDebtTotal = myDebts.reduce((sum: number, s: any) => sum + s.amount, 0);
+
+  function handleSettleAll() {
+    bulkSettle.mutate(
+      {
+        groupId: id,
+        settlements: myDebts.map((s: any) => ({ payeeId: s.to, amount: s.amount, currency })),
+      },
+      {
+        onSuccess: () => { setSettleModalOpen(false); Alert.alert('Success', 'All settlements recorded!'); },
+        onError: (e: any) => Alert.alert('Error', e?.response?.data?.message ?? 'Failed to settle'),
+      },
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -74,6 +96,13 @@ export default function GroupDetailScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>{g.name}</Text>
           {g.type && <Text style={styles.headerSubtitle}>{g.type.charAt(0) + g.type.slice(1).toLowerCase()}</Text>}
         </View>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => router.push('/groups/edit/' + id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Settings size={20} color="#6b7280" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.settleUpBtn}
           onPress={() => router.push('/settlements/new')}
@@ -106,22 +135,30 @@ export default function GroupDetailScreen() {
         {/* Simplified debts */}
         {simplified.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Settle Up</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Settle Up</Text>
+              {myDebts.length > 0 && (
+                <TouchableOpacity style={styles.settleAllBtn} onPress={() => setSettleModalOpen(true)}>
+                  <HandCoins size={14} color="#6366f1" />
+                  <Text style={styles.settleAllText}>Settle All ({formatCurrency(myDebtTotal, currency)})</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             {simplified.map((s: any, i: number) => (
               <Card key={i} style={styles.settleCard}>
                 <View style={styles.settleRow}>
-                  <Avatar name={s.from?.displayName} size="sm" />
+                  <Avatar name={s.fromUser?.displayName ?? s.from} size="sm" />
                   <View style={styles.settleArrow}>
                     <Text style={styles.settleArrowText}>→ owes →</Text>
                   </View>
-                  <Avatar name={s.to?.displayName} size="sm" />
+                  <Avatar name={s.toUser?.displayName ?? s.to} size="sm" />
                   <View style={styles.settleAmountWrapper}>
                     <Text style={styles.settleAmount}>{formatCurrency(s.amount, currency)}</Text>
                   </View>
                 </View>
                 <View style={styles.settleBottom}>
                   <Text style={styles.settleNames}>
-                    {s.from?.displayName} → {s.to?.displayName}
+                    {s.fromUser?.displayName ?? s.from} → {s.toUser?.displayName ?? s.to}
                   </Text>
                   <TouchableOpacity
                     style={styles.settleBtn}
@@ -145,9 +182,12 @@ export default function GroupDetailScreen() {
 
         {/* Members */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Members ({g.members?.length ?? 0})
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Members ({g.members?.length ?? 0})</Text>
+            <TouchableOpacity onPress={() => router.push('/groups/members/' + id)}>
+              <Text style={styles.manageLink}>Manage <Users size={12} color="#6366f1" /></Text>
+            </TouchableOpacity>
+          </View>
           {(g.members ?? []).map((m: any) => {
             const bal = allBalances.find((b: any) => b.userId === m.user?.id);
             return (
@@ -204,6 +244,35 @@ export default function GroupDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Settle All Modal */}
+      <Modal visible={settleModalOpen} transparent animationType="slide" onRequestClose={() => setSettleModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Settle All Your Debts</Text>
+            <Text style={styles.modalSubtitle}>
+              Record {myDebts.length} settlement{myDebts.length > 1 ? 's' : ''} totalling{' '}
+              {formatCurrency(myDebtTotal, currency)}
+            </Text>
+            {myDebts.map((s: any, i: number) => (
+              <View key={i} style={styles.debtRow}>
+                <Text style={styles.debtText}>You → {s.toUser?.displayName ?? s.to}</Text>
+                <Text style={styles.debtAmt}>{formatCurrency(s.amount, currency)}</Text>
+              </View>
+            ))}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setSettleModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleSettleAll} disabled={bulkSettle.isPending}>
+                {bulkSettle.isPending
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.confirmBtnText}>Confirm</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -261,4 +330,20 @@ const styles = StyleSheet.create({
   expenseDesc: { fontSize: 14, fontWeight: '600', color: '#111827' },
   expenseMeta: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
   expenseAmount: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  headerIconBtn: { padding: 4 },
+  settleAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  settleAllText: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
+  manageLink: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  modalSubtitle: { fontSize: 13, color: '#6b7280', marginBottom: 16 },
+  debtRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  debtText: { fontSize: 14, color: '#374151' },
+  debtAmt: { fontSize: 14, fontWeight: '700', color: '#6366f1' },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  cancelBtnText: { color: '#374151', fontWeight: '600' },
+  confirmBtn: { flex: 1, backgroundColor: '#6366f1', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  confirmBtnText: { color: '#fff', fontWeight: '700' },
 });

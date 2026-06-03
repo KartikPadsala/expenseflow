@@ -5,6 +5,8 @@ export default function GroupsLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" />
+      <Stack.Screen name="edit/[id]" />
+      <Stack.Screen name="members/[id]" />
     </Stack>
   );
 }

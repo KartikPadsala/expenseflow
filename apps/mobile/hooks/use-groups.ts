@@ -77,3 +77,21 @@ export function useAddGroupMember() {
     onSuccess: (_d, { groupId }) => qc.invalidateQueries({ queryKey: ['groups', groupId] }),
   });
 }
+
+export function useRemoveGroupMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, memberId }: { groupId: string; memberId: string }) => {
+      await api.delete(`/groups/${groupId}/members/${memberId}`);
+    },
+    onSuccess: (_d: any, { groupId }: { groupId: string }) => qc.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
+
+export function useArchiveGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.post(`/groups/${id}/archive`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
