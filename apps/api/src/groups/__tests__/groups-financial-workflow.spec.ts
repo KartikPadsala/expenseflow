@@ -85,3 +85,76 @@ describe('Financial Workflow - Settlement Lifecycle mock', () => {
     expect(dto.settlements.reduce((s, x) => s + x.amount, 0)).toBe(50);
   });
 });
+
+describe('Financial Workflow - Settlement balance deduction logic', () => {
+  // Replicate the getBalances settlement deduction logic in isolation
+
+  function applySettlement(
+    balanceMap: Map<string, Map<string, number>>,
+    payerId: string,
+    payeeId: string,
+    paid: number,
+  ) {
+    const ensureEntry = (from: string, to: string) => {
+      if (!balanceMap.has(from)) balanceMap.set(from, new Map());
+      if (!balanceMap.get(from)!.has(to)) balanceMap.get(from)!.set(to, 0);
+    };
+
+    const directDebt = balanceMap.get(payerId)?.get(payeeId) ?? 0;
+    if (directDebt > 0) {
+      const absorbed = Math.min(directDebt, paid);
+      balanceMap.get(payerId)!.set(payeeId, directDebt - absorbed);
+      paid = paid - absorbed;
+    }
+    if (paid > 0.01) {
+      const reverseDebt = balanceMap.get(payeeId)?.get(payerId) ?? 0;
+      if (reverseDebt > 0) {
+        const absorbed = Math.min(reverseDebt, paid);
+        ensureEntry(payeeId, payerId);
+        balanceMap.get(payeeId)!.set(payerId, reverseDebt - absorbed);
+        paid = paid - absorbed;
+      }
+    }
+    if (paid > 0.01) {
+      ensureEntry(payeeId, payerId);
+      const existingCredit = balanceMap.get(payeeId)!.get(payerId)!;
+      balanceMap.get(payeeId)!.set(payerId, existingCredit + paid);
+    }
+    return balanceMap;
+  }
+
+  it('exact payment clears debt to zero', () => {
+    const map = new Map([['Alice', new Map([['Bob', 50]])]]);
+    applySettlement(map, 'Alice', 'Bob', 50);
+    expect(map.get('Alice')!.get('Bob')).toBe(0);
+  });
+
+  it('partial payment reduces debt proportionally', () => {
+    const map = new Map([['Alice', new Map([['Bob', 100]])]]);
+    applySettlement(map, 'Alice', 'Bob', 60);
+    expect(map.get('Alice')!.get('Bob')).toBe(40);
+  });
+
+  it('overpayment creates credit in reverse direction', () => {
+    const map = new Map([['Alice', new Map([['Bob', 30]])]]);
+    applySettlement(map, 'Alice', 'Bob', 50); // Alice pays $50, only owes $30
+    expect(map.get('Alice')!.get('Bob')).toBe(0);
+    expect(map.get('Bob')!.get('Alice')).toBeCloseTo(20); // Bob now owes Alice $20
+  });
+
+  it('payment against reverse debt reduces it first', () => {
+    const map = new Map([
+      ['Alice', new Map([['Bob', 0]])],
+      ['Bob', new Map([['Alice', 40]])],
+    ]);
+    applySettlement(map, 'Alice', 'Bob', 25); // Alice pays Bob, Bob had a reverse debt to Alice
+    expect(map.get('Bob')!.get('Alice')).toBeCloseTo(15); // Bob's reverse debt reduced
+  });
+
+  it('payment exactly clearing both direct and reverse debts leaves zero', () => {
+    const map = new Map([['Alice', new Map([['Bob', 50]])]]);
+    applySettlement(map, 'Alice', 'Bob', 50);
+    const net = (map.get('Alice')!.get('Bob') ?? 0) - (map.get('Bob')?.get('Alice') ?? 0);
+    expect(Math.abs(net)).toBeLessThan(0.01);
+  });
+});
