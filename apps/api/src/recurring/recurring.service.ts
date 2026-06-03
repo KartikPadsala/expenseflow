@@ -122,9 +122,26 @@ export class RecurringService {
           continue;
         }
 
-        const participants = (recurring.participantsJson as any[]) ?? [];
+        const rawParticipants = (recurring.participantsJson as any[]) ?? [];
 
-        await this.expensesService.create(recurring.paidById ?? recurring.createdById, {
+        // Filter participants to current group members to avoid creating debts for removed members
+        let participants = rawParticipants;
+        if (recurring.groupId && rawParticipants.length > 0) {
+          const currentMembers = await this.prisma.groupMember.findMany({
+            where: { groupId: recurring.groupId },
+            select: { userId: true },
+          });
+          const memberSet = new Set(currentMembers.map((m) => m.userId));
+          participants = rawParticipants.filter((p: any) => memberSet.has(p.userId));
+        }
+
+        const payerId = recurring.paidById ?? recurring.createdById;
+        // Ensure there is always at least the payer as participant
+        if (participants.length === 0) {
+          participants = [{ userId: payerId }];
+        }
+
+        await this.expensesService.create(payerId, {
           description: recurring.description,
           amount: Number(recurring.amount),
           currency: recurring.currency,
@@ -133,7 +150,7 @@ export class RecurringService {
           notes: recurring.notes ?? undefined,
           groupId: recurring.groupId ?? undefined,
           categoryId: recurring.categoryId ?? undefined,
-          participants: participants.length > 0 ? participants : [{ userId: recurring.paidById ?? recurring.createdById }],
+          participants: participants,
         });
 
         const next = computeNextDate(recurring.nextDueDate, recurring.frequency as RecurringFrequency);
