@@ -43,3 +43,29 @@ export function useDeleteExpense() {
     },
   });
 }
+
+export function useUpdateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string } & Record<string, any>) => {
+      const { data } = await api.patch(`/expenses/${id}`, body);
+      return data.data;
+    },
+    onSuccess: (_d: any, { id }: { id: string }) => {
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['expenses', id] });
+      qc.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+export function useDuplicateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.post(`/expenses/${id}/duplicate`);
+      return data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}

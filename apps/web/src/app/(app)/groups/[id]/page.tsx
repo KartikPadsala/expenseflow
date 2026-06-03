@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExpenseCard } from '@/components/expenses/expense-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SettleAllButton } from '@/components/settlements/settle-all-button';
 import Link from 'next/link';
-import { Plus, Users, ArrowRight, HandCoins } from 'lucide-react';
+import { Plus, Users, ArrowRight, HandCoins, Pencil } from 'lucide-react';
 import { formatCurrency } from '@expenseflow/shared';
 
 export default function GroupDetailPage({ params }: { params: { id: string } }) {
@@ -20,19 +21,27 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">{group.name}</h1>
           <p className="text-muted-foreground">{group.members?.length} members</p>
         </div>
-        <Link href={`/groups/${params.id}/add-expense`}>
-          <Button><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
-        </Link>
-        <Link href={`/settlements/new?groupId=${params.id}`}>
-          <Button variant="outline" className="flex items-center gap-2">
-            <HandCoins className="h-4 w-4" />Settle Up
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href={`/expenses/new?groupId=${params.id}`}>
+            <Button><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
+          </Link>
+          <Link href={`/settlements/new?groupId=${params.id}`}>
+            <Button variant="outline" className="flex items-center gap-2">
+              <HandCoins className="h-4 w-4" />Settle Up
+            </Button>
+          </Link>
+          <SettleAllButton groupId={params.id} currency={group.currency ?? 'USD'} currentUserId={user?.id} />
+          <Link href={`/groups/${params.id}/edit`}>
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Pencil className="h-4 w-4" />Edit
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -58,13 +67,13 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
           <CardContent>
             <div className="space-y-2">
               {balances.simplified.map((s: any, i: number) => {
-                const payer = group.members?.find((m: any) => m.userId === s.from)?.user;
-                const payee = group.members?.find((m: any) => m.userId === s.to)?.user;
+                const fromName = s.fromUser?.displayName ?? group.members?.find((m: any) => m.userId === s.from)?.user?.displayName ?? s.from;
+                const toName = s.toUser?.displayName ?? group.members?.find((m: any) => m.userId === s.to)?.user?.displayName ?? s.to;
                 return (
                   <div key={i} className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{payer?.displayName || s.from}</span>
+                    <span className="font-medium">{fromName}</span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{payee?.displayName || s.to}</span>
+                    <span className="font-medium">{toName}</span>
                     <span className="ml-auto text-primary font-semibold">{formatCurrency(s.amount, group.currency)}</span>
                     <Link href={`/settlements/new?payeeId=${s.to}&amount=${s.amount}&groupId=${params.id}&currency=${group.currency}`}>
                       <Button size="sm" variant="outline" className="text-xs h-7">Settle</Button>

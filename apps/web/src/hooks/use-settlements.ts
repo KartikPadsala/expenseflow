@@ -67,3 +67,17 @@ export function useCancelSettlement() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settlements'] }),
   });
 }
+
+export function useBulkSettle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { groupId: string; settlements: Array<{ payeeId: string; amount: number; currency: string }> }) => {
+      const { data } = await api.post('/settlements/bulk', body);
+      return data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settlements'] });
+      qc.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}

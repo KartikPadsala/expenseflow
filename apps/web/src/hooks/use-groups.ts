@@ -51,3 +51,46 @@ export function useDeleteGroup() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
   });
 }
+
+export function useUpdateGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; description?: string; currency?: string }) => {
+      const { data } = await api.patch(`/groups/${id}`, body);
+      return data.data;
+    },
+    onSuccess: (_d: any, { id }: { id: string }) => {
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['groups', id] });
+    },
+  });
+}
+
+export function useArchiveGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.post(`/groups/${id}/archive`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
+export function useAddGroupMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: string; userId: string }) => {
+      const { data } = await api.post(`/groups/${groupId}/members`, { userId });
+      return data.data;
+    },
+    onSuccess: (_d: any, { groupId }: { groupId: string }) => qc.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
+
+export function useRemoveGroupMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, memberId }: { groupId: string; memberId: string }) => {
+      await api.delete(`/groups/${groupId}/members/${memberId}`);
+    },
+    onSuccess: (_d: any, { groupId }: { groupId: string }) => qc.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
