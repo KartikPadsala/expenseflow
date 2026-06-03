@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Receipt, HandCoins, PieChart,
-  Bell, Settings, LogOut, Wallet,
+  Bell, Settings, LogOut, Wallet, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLogout } from '@/hooks/use-auth';
@@ -14,6 +14,7 @@ const navItems = [
   { href: '/groups', label: 'Groups', icon: Users },
   { href: '/expenses', label: 'Expenses', icon: Receipt },
   { href: '/settlements', label: 'Settlements', icon: HandCoins },
+  { href: '/recurring', label: 'Recurring', icon: RefreshCw },
   { href: '/analytics', label: 'Analytics', icon: PieChart },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'Profile', icon: Settings },
