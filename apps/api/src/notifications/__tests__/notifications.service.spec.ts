@@ -118,6 +118,28 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('deregisterPushToken', () => {
+    it('removes the token from the user push tokens list', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        pushTokens: ['ExponentPushToken[abc]', 'ExponentPushToken[xyz]'],
+      });
+      await service.deregisterPushToken('u1', 'ExponentPushToken[abc]');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { pushTokens: { set: ['ExponentPushToken[xyz]'] } },
+      });
+    });
+
+    it('handles removing a token that does not exist gracefully', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ pushTokens: ['ExponentPushToken[abc]'] });
+      await service.deregisterPushToken('u1', 'ExponentPushToken[notexist]');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { pushTokens: { set: ['ExponentPushToken[abc]'] } },
+      });
+    });
+  });
+
   describe('event listeners', () => {
     describe('onExpenseCreated', () => {
       it('notifies participants except payer', async () => {
@@ -142,6 +164,55 @@ describe('NotificationsService', () => {
         mockPrisma.user.findUnique.mockRejectedValue(new Error('DB error'));
         const event = new ExpenseCreatedEvent('e1', null, 'X', 10, 'USD', 'u1', ['u1', 'u2'], 'u1');
         await expect(service.onExpenseCreated(event)).resolves.not.toThrow();
+      });
+    });
+
+    describe('onExpenseUpdated', () => {
+      it('notifies participants except the updater', async () => {
+        mockPrisma.user.findUnique.mockResolvedValue({ displayName: 'Alice' });
+        mockPrisma.notification.createMany.mockResolvedValue({ count: 1 });
+        const event = new ExpenseUpdatedEvent('e1', 'g1', 'Lunch', 'u1', ['u1', 'u2', 'u3']);
+        await service.onExpenseUpdated(event);
+        const call = mockPrisma.notification.createMany.mock.calls[0][0];
+        const userIds = call.data.map((d: any) => d.userId);
+        expect(userIds).not.toContain('u1');
+        expect(userIds).toContain('u2');
+        expect(userIds).toContain('u3');
+        expect(call.data[0].body).toContain('Alice');
+        expect(call.data[0].body).toContain('Lunch');
+      });
+
+      it('does nothing when updater is the only participant', async () => {
+        const event = new ExpenseUpdatedEvent('e1', null, 'Solo', 'u1', ['u1']);
+        await service.onExpenseUpdated(event);
+        expect(mockPrisma.notification.createMany).not.toHaveBeenCalled();
+      });
+
+      it('does not throw on error', async () => {
+        mockPrisma.user.findUnique.mockRejectedValue(new Error('DB error'));
+        const event = new ExpenseUpdatedEvent('e1', null, 'X', 'u1', ['u1', 'u2']);
+        await expect(service.onExpenseUpdated(event)).resolves.not.toThrow();
+      });
+    });
+
+    describe('onExpenseDeleted', () => {
+      it('notifies participants except the deleter', async () => {
+        mockPrisma.user.findUnique.mockResolvedValue({ displayName: 'Bob' });
+        mockPrisma.notification.createMany.mockResolvedValue({ count: 1 });
+        const event = new ExpenseDeletedEvent('e1', 'Pizza', 'u2', ['u1', 'u2']);
+        await service.onExpenseDeleted(event);
+        const call = mockPrisma.notification.createMany.mock.calls[0][0];
+        const userIds = call.data.map((d: any) => d.userId);
+        expect(userIds).toContain('u1');
+        expect(userIds).not.toContain('u2');
+        expect(call.data[0].body).toContain('Bob');
+        expect(call.data[0].body).toContain('Pizza');
+      });
+
+      it('does nothing when deleter is the only participant', async () => {
+        const event = new ExpenseDeletedEvent('e1', 'Solo', 'u1', ['u1']);
+        await service.onExpenseDeleted(event);
+        expect(mockPrisma.notification.createMany).not.toHaveBeenCalled();
       });
     });
 
