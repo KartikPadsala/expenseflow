@@ -58,7 +58,7 @@ export function calculateSplit(input: SplitInput): SplitResult[] {
 
     case 'SHARES': {
       const sharesMap = input.shares ?? {};
-      const totalShares = Object.values(sharesMap).reduce((s, v) => s + v, 0);
+      const totalShares = participantIds.reduce((s, id) => s + (sharesMap[id] ?? 1), 0);
       return participantIds.map((id) => {
         const share = sharesMap[id] ?? 1;
         return {
