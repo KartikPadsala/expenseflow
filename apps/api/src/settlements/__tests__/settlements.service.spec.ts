@@ -7,11 +7,16 @@ const mockPrisma = {
   settlement: {
     create: jest.fn(),
     findMany: jest.fn(),
+    findFirst: jest.fn().mockResolvedValue(null), // no existing PENDING by default
     findUnique: jest.fn(),
     update: jest.fn(),
-    $transaction: jest.fn(),
+  },
+  groupMember: {
+    findUnique: jest.fn().mockResolvedValue({ userId: 'u1', groupId: 'g1' }), // member by default
+    findMany: jest.fn().mockResolvedValue([{ userId: 'u2' }, { userId: 'u3' }]), // payees are members
   },
   user: { findUnique: jest.fn().mockResolvedValue({ displayName: 'Test User' }) },
+  $transaction: jest.fn((ops: any) => Promise.all(Array.isArray(ops) ? ops : [ops])),
 };
 
 describe('SettlementsService', () => {
@@ -25,6 +30,7 @@ describe('SettlementsService', () => {
   describe('create', () => {
     it('creates a settlement with required fields', async () => {
       const settlement = { id: 's1', payerId: 'u1', payeeId: 'u2', amount: 50, currency: 'USD', status: 'PENDING', method: 'CASH', createdAt: new Date(), payer: {}, payee: {} };
+      mockPrisma.settlement.findFirst.mockResolvedValue(null); // no existing PENDING
       mockPrisma.settlement.create.mockResolvedValue(settlement);
 
       const result = await service.create('u1', { payeeId: 'u2', amount: 50, currency: 'USD' });
@@ -36,6 +42,7 @@ describe('SettlementsService', () => {
     });
 
     it('defaults method to CASH when not provided', async () => {
+      mockPrisma.settlement.findFirst.mockResolvedValue(null);
       mockPrisma.settlement.create.mockResolvedValue({ id: 's1', method: 'CASH', payer: {}, payee: {} });
       await service.create('u1', { payeeId: 'u2', amount: 25, currency: 'USD' });
       expect(mockPrisma.settlement.create).toHaveBeenCalledWith(
@@ -46,6 +53,12 @@ describe('SettlementsService', () => {
     it('throws BadRequestException when payee equals payer (self-settlement)', async () => {
       await expect(service.create('u1', { payeeId: 'u1', amount: 50, currency: 'USD' }))
         .rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ConflictException when PENDING settlement already exists for same payer/payee', async () => {
+      mockPrisma.settlement.findFirst.mockResolvedValue({ id: 'existing', status: 'PENDING' });
+      await expect(service.create('u1', { payeeId: 'u2', amount: 50, currency: 'USD' }))
+        .rejects.toThrow(ConflictException);
     });
   });
 
@@ -182,11 +195,42 @@ describe('SettlementsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('throws ForbiddenException when caller is not a group member', async () => {
+      mockPrisma.groupMember.findUnique.mockResolvedValueOnce(null); // caller not a member
+      await expect(
+        service.bulkCreate('u1', { groupId: 'g1', settlements: [{ payeeId: 'u2', amount: 50, currency: 'USD' }] })
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws BadRequestException when a payee is not a group member', async () => {
+      mockPrisma.groupMember.findUnique.mockResolvedValueOnce({ userId: 'u1' }); // caller is member
+      mockPrisma.groupMember.findMany.mockResolvedValueOnce([]); // no payees found as members
+      await expect(
+        service.bulkCreate('u1', { groupId: 'g1', settlements: [{ payeeId: 'u99', amount: 50, currency: 'USD' }] })
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('throws ConflictException when PENDING settlement already exists for same pair', async () => {
-      mockPrisma.settlement.findMany.mockResolvedValue([{ payeeId: 'u2' }]);
+      mockPrisma.groupMember.findUnique.mockResolvedValueOnce({ userId: 'u1' });
+      mockPrisma.groupMember.findMany.mockResolvedValueOnce([{ userId: 'u2' }]);
+      mockPrisma.settlement.findMany.mockResolvedValueOnce([{ payeeId: 'u2' }]);
       await expect(
         service.bulkCreate('u1', { groupId: 'g1', settlements: [{ payeeId: 'u2', amount: 50, currency: 'USD' }] })
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('creates settlements for valid input', async () => {
+      mockPrisma.groupMember.findUnique.mockResolvedValueOnce({ userId: 'u1' });
+      mockPrisma.groupMember.findMany.mockResolvedValueOnce([{ userId: 'u2' }]);
+      mockPrisma.settlement.findMany.mockResolvedValueOnce([]); // no existing PENDING
+      const created = { id: 's1', payerId: 'u1', payeeId: 'u2', amount: 50, payer: {}, payee: {} };
+      mockPrisma.settlement.create.mockResolvedValueOnce(created);
+      const result = await service.bulkCreate('u1', {
+        groupId: 'g1',
+        settlements: [{ payeeId: 'u2', amount: 50, currency: 'USD' }],
+      });
+      expect(Array.isArray(result)).toBe(true);
+      expect(result[0]).toEqual(created);
     });
   });
 });

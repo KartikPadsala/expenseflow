@@ -17,12 +17,34 @@ export class SettlementsService {
       throw new BadRequestException('Cannot create a settlement with yourself');
     }
 
+    // Guard: caller must be a member of the group
+    const callerMembership = await this.prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId: dto.groupId, userId: payerId } },
+    });
+    if (!callerMembership) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
+    // Guard: all payees must also be group members
+    const payeeIds = dto.settlements.map((s) => s.payeeId);
+    const payeeMembers = await this.prisma.groupMember.findMany({
+      where: { groupId: dto.groupId, userId: { in: payeeIds } },
+      select: { userId: true },
+    });
+    const memberSet = new Set(payeeMembers.map((m) => m.userId));
+    const nonMembers = payeeIds.filter((id) => !memberSet.has(id));
+    if (nonMembers.length > 0) {
+      throw new BadRequestException(
+        `The following payees are not members of this group: ${nonMembers.join(', ')}`,
+      );
+    }
+
     // Guard: no duplicate PENDING settlements for the same payer/payee/group
     const existingPending = await this.prisma.settlement.findMany({
       where: {
         payerId,
-        payeeId: { in: dto.settlements.map((s) => s.payeeId) },
-        ...(dto.groupId ? { groupId: dto.groupId } : {}),
+        payeeId: { in: payeeIds },
+        groupId: dto.groupId,
         status: 'PENDING',
       },
       select: { payeeId: true },
@@ -56,6 +78,21 @@ export class SettlementsService {
   async create(payerId: string, dto: CreateSettlementDto) {
     if (dto.payeeId === payerId) {
       throw new BadRequestException('Cannot create a settlement with yourself');
+    }
+
+    // Guard: no duplicate PENDING settlement for the same payer/payee/group
+    const existingPending = await this.prisma.settlement.findFirst({
+      where: {
+        payerId,
+        payeeId: dto.payeeId,
+        ...(dto.groupId ? { groupId: dto.groupId } : { groupId: null }),
+        status: 'PENDING',
+      },
+    });
+    if (existingPending) {
+      throw new ConflictException(
+        'A pending settlement already exists for this payer/payee. Cancel it before creating a new one.',
+      );
     }
 
     const settlement = await this.prisma.settlement.create({
