@@ -54,7 +54,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
 
       {balances?.simplified?.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>Suggested Settlements</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Suggested Settlements {balances?.currency && <span className="text-sm font-normal text-muted-foreground ml-1">in {balances.currency}</span>}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {balances.simplified.map((s: any, i: number) => {

@@ -125,6 +125,11 @@ export default function ExpenseDetailScreen() {
           </View>
           <Text style={styles.expenseDescription}>{e.description}</Text>
           <Text style={styles.expenseAmount}>{formatCurrency(e.amount, e.currency)}</Text>
+          {(e as any).convertedAmount != null && (e as any).baseCurrency && (e as any).baseCurrency !== e.currency && (
+            <Text style={styles.convertedAmt}>
+              ≈ {formatCurrency((e as any).convertedAmount, (e as any).baseCurrency)}
+            </Text>
+          )}
           {e.category && (
             <Badge variant="neutral" style={styles.categoryBadge}>
               {e.category.name}
@@ -243,6 +248,7 @@ const styles = StyleSheet.create({
   categoryEmoji: { fontSize: 32 },
   expenseDescription: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },
   expenseAmount: { fontSize: 36, fontWeight: '800', color: '#111827', marginBottom: 10 },
+  convertedAmt: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   categoryBadge: {},
   actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e5e7eb' },

@@ -9,6 +9,8 @@ interface ExpenseCardProps {
     description: string;
     amount: number;
     currency: string;
+    convertedAmount?: number | null;
+    baseCurrency?: string | null;
     date: string;
     paidBy: { displayName: string };
     participants: { userId: string; owedAmount: number }[];
@@ -45,6 +47,11 @@ export function ExpenseCard({ expense, currentUserId }: ExpenseCardProps) {
             </div>
             <div className="text-right">
               <p className="font-semibold">{formatCurrency(Number(expense.amount), expense.currency)}</p>
+              {expense.convertedAmount != null && expense.baseCurrency && expense.baseCurrency !== expense.currency && (
+                <span className="text-xs text-muted-foreground">
+                  ≈ {formatCurrency(expense.convertedAmount, expense.baseCurrency)}
+                </span>
+              )}
               {myShare > 0 && (
                 <p className="text-sm text-muted-foreground">
                   Your share: {formatCurrency(myShare, expense.currency)}

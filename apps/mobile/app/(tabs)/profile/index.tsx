@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { Edit2, LogOut, X, Camera, CheckCircle, AlertCircle } from 'lucide-react
 import * as ImagePicker from 'expo-image-picker';
 import { useProfile, useUpdateProfile } from '../../../hooks/use-profile';
 import { useAuthStore } from '../../../store/auth.store';
+import { useSettingsStore } from '../../../store/settings.store';
 import { Card } from '../../../components/ui/Card';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Button } from '../../../components/ui/Button';
@@ -41,6 +42,7 @@ type EditForm = z.infer<typeof editSchema>;
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
+  const settingsStore = useSettingsStore();
   const [showEdit, setShowEdit] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -48,6 +50,15 @@ export default function ProfileScreen() {
   const { mutate: updateProfile, isPending: saving } = useUpdateProfile();
 
   const profileData = profile.data ?? user;
+
+  useEffect(() => {
+    if (profileData) {
+      settingsStore.syncFromProfile({
+        defaultCurrency: (profileData as any).defaultCurrency,
+        language: (profileData as any).language,
+      });
+    }
+  }, [(profileData as any)?.defaultCurrency, (profileData as any)?.language]);
 
   const {
     control,
