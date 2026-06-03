@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryProvider } from '../components/QueryProvider';
+import { SyncProvider } from '../components/SyncProvider';
 import { useAuthStore } from '../store/auth.store';
 
 SplashScreen.preventAutoHideAsync();
@@ -16,11 +17,13 @@ export default function RootLayout() {
 
   return (
     <QueryProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-      <StatusBar style="auto" />
+      <SyncProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+        <StatusBar style="auto" />
+      </SyncProvider>
     </QueryProvider>
   );
 }
