@@ -3,12 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto, UpdateExpenseDto, ListExpensesDto } from './dto';
 import { calculateSplit } from '@expenseflow/shared';
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents, ExpenseCreatedEvent, ExpenseUpdatedEvent, ExpenseDeletedEvent } from '../notifications/events/notification.events';
 
 @Injectable()
 export class ExpensesService {
   constructor(
     private prisma: PrismaService,
     private exchangeRatesService: ExchangeRatesService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(userId: string, dto: CreateExpenseDto) {
@@ -51,7 +54,7 @@ export class ExpensesService {
       exchangeRateValue = result.rate;
     }
 
-    return this.prisma.expense.create({
+    const expense = await this.prisma.expense.create({
       data: {
         description: expenseData.description,
         amount: expenseData.amount,
@@ -84,9 +87,23 @@ export class ExpensesService {
         paidBy: { select: { id: true, displayName: true, avatarUrl: true } },
       },
     });
-  }
 
-  async findAll(userId: string, query: ListExpensesDto) {
+    this.eventEmitter.emit(
+      NotificationEvents.EXPENSE_CREATED,
+      new ExpenseCreatedEvent(
+        expense.id,
+        expense.groupId ?? null,
+        expense.description,
+        Number(expense.amount),
+        expense.currency,
+        expense.paidById,
+        expense.participants.map((p: any) => p.userId),
+        userId,
+      ),
+    );
+
+    return expense;
+  }(userId: string, query: ListExpensesDto) {
     const where: Record<string, unknown> = {
       isDeleted: false,
       OR: [{ paidById: userId }, { participants: { some: { userId } } }],
@@ -183,7 +200,7 @@ export class ExpensesService {
 
     await this.prisma.expenseParticipant.deleteMany({ where: { expenseId } });
 
-    return this.prisma.expense.update({
+    const updated = await this.prisma.expense.update({
       where: { id: expenseId },
       data: {
         description: expenseData.description,
@@ -214,6 +231,19 @@ export class ExpensesService {
         paidBy: { select: { id: true, displayName: true, avatarUrl: true } },
       },
     });
+
+    this.eventEmitter.emit(
+      NotificationEvents.EXPENSE_UPDATED,
+      new ExpenseUpdatedEvent(
+        updated.id,
+        updated.groupId ?? null,
+        updated.description,
+        userId,
+        updated.participants.map((p: any) => p.userId),
+      ),
+    );
+
+    return updated;
   }
 
   async delete(expenseId: string, userId: string) {
@@ -222,6 +252,17 @@ export class ExpensesService {
       throw new ForbiddenException('Only the creator can delete this expense');
     }
     await this.prisma.expense.update({ where: { id: expenseId }, data: { isDeleted: true } });
+
+    this.eventEmitter.emit(
+      NotificationEvents.EXPENSE_DELETED,
+      new ExpenseDeletedEvent(
+        expenseId,
+        expense.description,
+        userId,
+        expense.participants?.map((p: any) => p.userId) ?? [],
+      ),
+    );
+
     return { message: 'Expense deleted' };
   }
 

@@ -5,12 +5,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateGroupDto, UpdateGroupDto, AddMemberDto, UpdateMemberRoleDto } from './dto';
 import { simplifyDebts, DebtTransaction } from '@expenseflow/shared';
 import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents, GroupInviteEvent } from '../notifications/events/notification.events';
 
 @Injectable()
 export class GroupsService {
   constructor(
     private prisma: PrismaService,
     private exchangeRatesService: ExchangeRatesService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(userId: string, dto: CreateGroupDto) {
@@ -70,10 +73,27 @@ export class GroupsService {
       where: { groupId_userId: { groupId, userId: dto.userId } },
     });
     if (existing) throw new ConflictException('User is already a member');
-    return this.prisma.groupMember.create({
-      data: { groupId, userId: dto.userId },
-      include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
-    });
+
+    const [group, requester, newMember] = await Promise.all([
+      this.prisma.group.findUnique({ where: { id: groupId }, select: { name: true } }),
+      this.prisma.user.findUnique({ where: { id: requesterId }, select: { displayName: true } }),
+      this.prisma.groupMember.create({
+        data: { groupId, userId: dto.userId },
+        include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+      }),
+    ]);
+
+    this.eventEmitter.emit(
+      NotificationEvents.GROUP_INVITE,
+      new GroupInviteEvent(
+        groupId,
+        group?.name ?? '',
+        dto.userId,
+        requester?.displayName ?? 'Someone',
+      ),
+    );
+
+    return newMember;
   }
 
   async removeMember(groupId: string, requesterId: string, memberId: string) {

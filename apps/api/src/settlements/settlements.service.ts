@@ -1,13 +1,18 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSettlementDto } from './dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NotificationEvents, SettlementRequestedEvent, SettlementCompletedEvent } from '../notifications/events/notification.events';
 
 @Injectable()
 export class SettlementsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(payerId: string, dto: CreateSettlementDto) {
-    return this.prisma.settlement.create({
+    const settlement = await this.prisma.settlement.create({
       data: {
         payerId,
         payeeId: dto.payeeId,
@@ -22,6 +27,20 @@ export class SettlementsService {
         payee: { select: { id: true, displayName: true, avatarUrl: true } },
       },
     });
+
+    this.eventEmitter.emit(
+      NotificationEvents.SETTLEMENT_REQUESTED,
+      new SettlementRequestedEvent(
+        settlement.id,
+        Number(settlement.amount),
+        settlement.currency,
+        settlement.payerId,
+        (settlement.payer as any)?.displayName ?? 'Someone',
+        settlement.payeeId,
+      ),
+    );
+
+    return settlement;
   }
 
   async findAll(userId: string, groupId?: string, status?: string) {
@@ -62,10 +81,26 @@ export class SettlementsService {
     const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
     if (settlement.payeeId !== userId) throw new ForbiddenException('Only payee can mark as complete');
-    return this.prisma.settlement.update({
+
+    const completed = await this.prisma.settlement.update({
       where: { id: settlementId },
       data: { status: 'COMPLETED', settledAt: new Date() },
     });
+
+    const payee = await this.prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
+    this.eventEmitter.emit(
+      NotificationEvents.SETTLEMENT_COMPLETED,
+      new SettlementCompletedEvent(
+        completed.id,
+        Number(completed.amount),
+        completed.currency,
+        completed.payerId,
+        completed.payeeId,
+        payee?.displayName ?? 'Someone',
+      ),
+    );
+
+    return completed;
   }
 
   async cancel(settlementId: string, userId: string) {
