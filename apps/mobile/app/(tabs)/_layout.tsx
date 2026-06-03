@@ -1,5 +1,5 @@
 import { Tabs, Redirect } from 'expo-router';
-import { LayoutDashboard, Users, Receipt, PieChart, User, UserPlus, HandCoins } from 'lucide-react-native';
+import { LayoutDashboard, Users, Receipt, PieChart, User, UserPlus, HandCoins, RefreshCw } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth.store';
 
 export default function TabsLayout() {
@@ -34,6 +34,13 @@ export default function TabsLayout() {
         options={{
           title: 'Settle',
           tabBarIcon: ({ color, size }) => <HandCoins size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="recurring"
+        options={{
+          title: 'Recurring',
+          tabBarIcon: ({ color, size }) => <RefreshCw size={size} color={color} />,
         }}
       />
       <Tabs.Screen
