@@ -24,15 +24,38 @@ export class SettlementsService {
     });
   }
 
-  async findAll(userId: string) {
+  async findAll(userId: string, groupId?: string, status?: string) {
+    const where: any = {
+      OR: [{ payerId: userId }, { payeeId: userId }],
+    };
+    if (groupId) where.groupId = groupId;
+    if (status) where.status = status;
+
     return this.prisma.settlement.findMany({
-      where: { OR: [{ payerId: userId }, { payeeId: userId }] },
+      where,
       include: {
         payer: { select: { id: true, displayName: true, avatarUrl: true } },
         payee: { select: { id: true, displayName: true, avatarUrl: true } },
+        group: { select: { id: true, name: true, currency: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findOne(settlementId: string, userId: string) {
+    const settlement = await this.prisma.settlement.findUnique({
+      where: { id: settlementId },
+      include: {
+        payer: { select: { id: true, displayName: true, avatarUrl: true, email: true } },
+        payee: { select: { id: true, displayName: true, avatarUrl: true, email: true } },
+        group: { select: { id: true, name: true, currency: true } },
+      },
+    });
+    if (!settlement) throw new NotFoundException('Settlement not found');
+    if (settlement.payerId !== userId && settlement.payeeId !== userId) {
+      throw new ForbiddenException('You are not a party to this settlement');
+    }
+    return settlement;
   }
 
   async complete(settlementId: string, userId: string) {
