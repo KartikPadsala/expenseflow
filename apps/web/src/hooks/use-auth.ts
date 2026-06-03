@@ -56,3 +56,32 @@ export function useCurrentUser() {
     initialData: user,
   });
 }
+
+export function useProfile() {
+  const { isAuthenticated } = useAuthStore();
+  return useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const { data } = await api.get('/users/me');
+      return data.data;
+    },
+    enabled: isAuthenticated(),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  const { setAuth, user, accessToken, refreshToken } = useAuthStore();
+  return useMutation({
+    mutationFn: async (body: { displayName?: string; defaultCurrency?: string; language?: string; timezone?: string }) => {
+      const { data } = await api.patch('/users/me', body);
+      return data.data;
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData(['profile'], updated);
+      qc.setQueryData(['me'], updated);
+      if (user && accessToken && refreshToken) setAuth({ ...user, ...updated }, accessToken, refreshToken);
+    },
+  });
+}

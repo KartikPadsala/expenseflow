@@ -1,16 +1,19 @@
 'use client';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateGroup } from '@/hooks/use-groups';
-import { GROUP_TYPES } from '@expenseflow/shared';
+import { GROUP_TYPES, CURRENCIES } from '@expenseflow/shared';
+
+const CURRENCY_CODES = Object.keys(CURRENCIES);
 
 export default function NewGroupPage() {
   const { mutate: createGroup, isPending } = useCreateGroup();
   const router = useRouter();
-  const { register, handleSubmit, watch, setValue } = useForm({
+  const { register, handleSubmit, watch, setValue, control } = useForm({
     defaultValues: { name: '', type: 'OTHER', currency: 'USD', description: '' },
   });
   const selectedType = watch('type');
@@ -49,7 +52,24 @@ export default function NewGroupPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Default Currency</label>
-              <Input placeholder="USD" {...register('currency')} />
+              <Controller
+                control={control}
+                name="currency"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {CURRENCY_CODES.map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {CURRENCIES[code]?.flag} {code} — {CURRENCIES[code]?.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description (optional)</label>
