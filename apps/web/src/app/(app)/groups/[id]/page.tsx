@@ -7,7 +7,7 @@ import { ExpenseCard } from '@/components/expenses/expense-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { Plus, Users, ArrowRight } from 'lucide-react';
+import { Plus, Users, ArrowRight, HandCoins } from 'lucide-react';
 import { formatCurrency } from '@expenseflow/shared';
 
 export default function GroupDetailPage({ params }: { params: { id: string } }) {
@@ -27,6 +27,11 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
         </div>
         <Link href={`/groups/${params.id}/add-expense`}>
           <Button><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
+        </Link>
+        <Link href={`/settlements/new?groupId=${params.id}`}>
+          <Button variant="outline" className="flex items-center gap-2">
+            <HandCoins className="h-4 w-4" />Settle Up
+          </Button>
         </Link>
       </div>
 
@@ -61,6 +66,9 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">{payee?.displayName || s.to}</span>
                     <span className="ml-auto text-primary font-semibold">{formatCurrency(s.amount, group.currency)}</span>
+                    <Link href={`/settlements/new?payeeId=${s.to}&amount=${s.amount}&groupId=${params.id}&currency=${group.currency}`}>
+                      <Button size="sm" variant="outline" className="text-xs h-7">Settle</Button>
+                    </Link>
                   </div>
                 );
               })}
