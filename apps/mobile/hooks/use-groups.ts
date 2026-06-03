@@ -8,6 +8,7 @@ export function useGroups() {
       const { data } = await api.get('/groups');
       return data.data as any[];
     },
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -22,13 +23,57 @@ export function useGroup(id: string) {
   });
 }
 
+export function useGroupBalances(id: string) {
+  return useQuery({
+    queryKey: ['groups', id, 'balances'],
+    queryFn: async () => {
+      const { data } = await api.get(`/groups/${id}/balances`);
+      return data.data;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { name: string; type?: string; currency?: string }) => {
+    mutationFn: async (body: { name: string; type?: string; currency?: string; description?: string }) => {
       const { data } = await api.post('/groups', body);
       return data.data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
+export function useUpdateGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; description?: string; currency?: string }) => {
+      const { data } = await api.patch(`/groups/${id}`, body);
+      return data.data;
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['groups', id] });
+    },
+  });
+}
+
+export function useDeleteGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.delete(`/groups/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
+export function useAddGroupMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: string; userId: string }) => {
+      const { data } = await api.post(`/groups/${groupId}/members`, { userId });
+      return data.data;
+    },
+    onSuccess: (_d, { groupId }) => qc.invalidateQueries({ queryKey: ['groups', groupId] }),
   });
 }

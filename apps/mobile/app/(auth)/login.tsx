@@ -1,102 +1,155 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+} from 'react-native';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import api from '../../lib/api';
-import { useAuthStore } from '../../store/auth.store';
+import { useLogin } from '../../hooks/use-auth';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { setAuth } = useAuthStore();
   const router = useRouter();
+  const { mutate: login, isPending, error } = useLogin();
 
-  const handleLogin = async () => {
-    if (!email || !password) { Alert.alert('Error', 'Please fill in all fields'); return; }
-    setLoading(true);
-    try {
-      const { data: loginData } = await api.post('/auth/login', { email, password });
-      const { accessToken, refreshToken } = loginData.data;
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
 
-      // Temp set token to fetch user
-      const { data: userData } = await api.get('/users/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      await setAuth(userData.data, accessToken, refreshToken);
-      router.replace('/(tabs)/dashboard');
-    } catch (err: any) {
-      Alert.alert('Login Failed', err?.response?.data?.message || 'Invalid credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const onSubmit = (data: LoginForm) => login(data);
+
+  const errorMessage =
+    (error as any)?.response?.data?.message || (error ? 'Invalid email or password' : null);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.logo}>💸</Text>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to ExpenseFlow</Text>
-        </View>
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            placeholderTextColor="#9ca3af"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-            <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-            <Text style={styles.link}>Don&apos;t have an account? <Text style={styles.linkBold}>Sign up</Text></Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.logo}>💸</Text>
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Sign in to your ExpenseFlow account</Text>
+          </View>
+
+          <View style={styles.form}>
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Email"
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                  error={errors.email?.message}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Password"
+                  placeholder="••••••••"
+                  secureTextEntry
+                  autoComplete="password"
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  value={value}
+                  error={errors.password?.message}
+                />
+              )}
+            />
+
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/forgot-password')}
+              style={styles.forgotLink}
+            >
+              <Text style={styles.forgotLinkText}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            {errorMessage && (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            )}
+
+            <Button
+              onPress={handleSubmit(onSubmit)}
+              loading={isPending}
+              fullWidth
+              style={styles.submitBtn}
+            >
+              Sign In
+            </Button>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+              <Text style={styles.footerLink}>Sign up free</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f0fdf4' },
+  flex: { flex: 1 },
   container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  header: { alignItems: 'center', marginBottom: 40 },
-  logo: { fontSize: 60, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 16, color: '#6b7280', marginTop: 4 },
+  header: { alignItems: 'center', marginBottom: 36 },
+  logo: { fontSize: 64, marginBottom: 16 },
+  title: { fontSize: 28, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#6b7280', marginTop: 6, textAlign: 'center' },
   form: { gap: 16 },
-  input: {
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    color: '#111827',
+  forgotLink: { alignSelf: 'flex-end', marginTop: -4 },
+  forgotLinkText: { fontSize: 13, color: '#22c55e', fontWeight: '500' },
+  errorBanner: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  button: {
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  link: { textAlign: 'center', color: '#6b7280', marginTop: 16 },
-  linkBold: { color: '#22c55e', fontWeight: '600' },
+  errorBannerText: { fontSize: 13, color: '#dc2626', textAlign: 'center' },
+  submitBtn: { marginTop: 8 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
+  footerText: { fontSize: 14, color: '#6b7280' },
+  footerLink: { fontSize: 14, color: '#22c55e', fontWeight: '600' },
 });
