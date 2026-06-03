@@ -98,6 +98,16 @@ export class GroupsService {
 
   async removeMember(groupId: string, requesterId: string, memberId: string) {
     await this.requireAdminOrOwner(groupId, requesterId);
+
+    // Block removal if member has outstanding balance
+    const { balances, currency } = await this.getBalances(groupId, requesterId);
+    const memberBalance = balances.find((b) => b.userId === memberId);
+    if (memberBalance && Math.abs(memberBalance.amount) > 0.01) {
+      throw new BadRequestException(
+        `Member has an outstanding balance of ${memberBalance.amount} ${currency}. Settle all debts before removing.`,
+      );
+    }
+
     await this.prisma.groupMember.delete({
       where: { groupId_userId: { groupId, userId: memberId } },
     });
@@ -161,6 +171,39 @@ export class GroupsService {
         ensureEntry(participant.userId, expense.paidById);
         const current = balanceMap.get(participant.userId)!.get(expense.paidById)!;
         balanceMap.get(participant.userId)!.set(expense.paidById, current + owed);
+      }
+    }
+
+    // Subtract completed settlements from the debt graph so balances reflect actual payments
+    const completedSettlements = await this.prisma.settlement.findMany({
+      where: { groupId, status: 'COMPLETED' },
+    });
+
+    for (const s of completedSettlements) {
+      let paid = Number(s.amount);
+
+      // Convert settlement currency to group currency if needed
+      if (s.currency !== groupCurrency) {
+        const refDate = (s.settledAt ?? s.createdAt).toISOString().slice(0, 10);
+        const { convertedAmount } = await this.exchangeRatesService.convertAmount(
+          paid, s.currency, groupCurrency, refDate,
+        );
+        paid = convertedAmount;
+      }
+
+      // Reduce payer→payee debt
+      const directDebt = balanceMap.get(s.payerId)?.get(s.payeeId) ?? 0;
+      if (directDebt > 0) {
+        const remaining = Math.max(0, directDebt - paid);
+        balanceMap.get(s.payerId)!.set(s.payeeId, remaining);
+        paid = Math.max(0, paid - directDebt); // excess after covering direct debt
+      }
+
+      // Any excess reduces the reverse debt (payee owed payer)
+      if (paid > 0.01) {
+        const reverseDebt = balanceMap.get(s.payeeId)?.get(s.payerId) ?? 0;
+        ensureEntry(s.payeeId, s.payerId);
+        balanceMap.get(s.payeeId)!.set(s.payerId, Math.max(0, reverseDebt - paid));
       }
     }
 
