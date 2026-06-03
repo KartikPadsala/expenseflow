@@ -198,10 +198,10 @@ model Expense {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  group           Group?               @relation(fields: [groupId], references: [id])
+  group           Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
   category        Category?            @relation(fields: [categoryId], references: [id])
-  paidBy          User                 @relation("ExpensePaidBy", fields: [paidById], references: [id])
-  createdBy       User                 @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  paidBy          User                 @relation("ExpensePaidBy", fields: [paidById], references: [id], onDelete: Restrict)
+  createdBy       User                 @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   recurring       RecurringExpense?    @relation(fields: [recurringId], references: [id])
   participants    ExpenseParticipant[]
   items           ExpenseItem[]
@@ -225,7 +225,7 @@ model ExpenseParticipant {
   shares       Int?
 
   expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([expenseId, userId])
   @@index([userId])
@@ -267,8 +267,8 @@ model Settlement {
   settledAt DateTime?
 
   group Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  payer User   @relation("SettlementPayer", fields: [payerId], references: [id])
-  payee User   @relation("SettlementPayee", fields: [payeeId], references: [id])
+  payer User   @relation("SettlementPayer", fields: [payerId], references: [id], onDelete: Restrict)
+  payee User   @relation("SettlementPayee", fields: [payeeId], references: [id], onDelete: Restrict)
 
   @@index([payerId])
   @@index([payeeId])
@@ -294,10 +294,10 @@ model RecurringExpense {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
-  group     Group?    @relation(fields: [groupId], references: [id])
-  createdBy User      @relation(fields: [createdById], references: [id])
+  group     Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
   category  Category? @relation(fields: [categoryId], references: [id])
-  paidBy    User?     @relation("RecurringPaidBy", fields: [paidById], references: [id])
+  paidBy    User?     @relation("RecurringPaidBy", fields: [paidById], references: [id], onDelete: SetNull)
   expenses  Expense[]
 }
 
