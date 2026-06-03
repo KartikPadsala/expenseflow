@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto, UpdateGroupDto, AddMemberDto, UpdateMemberRoleDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,6 +15,13 @@ export class GroupsController {
   @Post()
   create(@CurrentUser() user: { id: string }, @Body() dto: CreateGroupDto) {
     return this.groupsService.create(user.id, dto);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search groups by name' })
+  @ApiQuery({ name: 'q', description: 'Search query', required: true })
+  searchGroups(@CurrentUser() user: { id: string }, @Query('q') q: string) {
+    return this.groupsService.search(user.id, q);
   }
 
   @Get()

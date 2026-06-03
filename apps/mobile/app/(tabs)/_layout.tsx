@@ -1,5 +1,5 @@
 import { Tabs, Redirect } from 'expo-router';
-import { LayoutDashboard, Users, Receipt, PieChart, User, UserPlus, HandCoins, RefreshCw, Bell } from 'lucide-react-native';
+import { LayoutDashboard, Users, Receipt, PieChart, User, UserPlus, HandCoins, RefreshCw, Bell, Search } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth.store';
 import { useUnreadCount } from '../../hooks/use-notifications';
 import { PushNotificationRegistrar } from '../../components/PushNotificationRegistrar';
@@ -26,6 +26,10 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="dashboard"
           options={{ title: 'Dashboard', tabBarIcon: ({ color }) => <LayoutDashboard size={22} color={color} /> }}
+        />
+        <Tabs.Screen
+          name="search"
+          options={{ title: 'Search', tabBarIcon: ({ color }) => <Search size={22} color={color} /> }}
         />
         <Tabs.Screen
           name="groups"

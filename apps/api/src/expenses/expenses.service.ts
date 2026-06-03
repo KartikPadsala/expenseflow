@@ -124,11 +124,32 @@ export class ExpensesService {
 
     if (query.groupId) where.groupId = query.groupId;
     if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.search) where.description = { contains: query.search, mode: 'insensitive' };
+    if (query.paidById) where.paidById = query.paidById;
+    if (query.search) {
+      where.OR = [
+        { description: { contains: query.search, mode: 'insensitive' } },
+        { notes: { contains: query.search, mode: 'insensitive' } },
+      ];
+      // Keep the base access-control OR combined with the search OR
+      where.AND = [
+        { OR: [{ paidById: userId }, { participants: { some: { userId } } }] },
+        { OR: [
+          { description: { contains: query.search, mode: 'insensitive' } },
+          { notes: { contains: query.search, mode: 'insensitive' } },
+        ]},
+      ];
+      delete where.OR;
+    }
     if (query.fromDate || query.toDate) {
       where.date = {
         ...(query.fromDate ? { gte: new Date(query.fromDate) } : {}),
         ...(query.toDate ? { lte: new Date(query.toDate) } : {}),
+      };
+    }
+    if (query.minAmount != null || query.maxAmount != null) {
+      where.amount = {
+        ...(query.minAmount != null ? { gte: query.minAmount } : {}),
+        ...(query.maxAmount != null ? { lte: query.maxAmount } : {}),
       };
     }
 

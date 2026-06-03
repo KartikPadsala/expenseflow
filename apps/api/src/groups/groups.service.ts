@@ -38,6 +38,26 @@ export class GroupsService {
     });
   }
 
+  async search(userId: string, q: string) {
+    if (!q || q.trim().length < 1) return [];
+    return this.prisma.group.findMany({
+      where: {
+        members: { some: { userId } },
+        isArchived: false,
+        name: { contains: q.trim(), mode: 'insensitive' },
+      },
+      include: {
+        members: {
+          take: 4,
+          include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+        },
+        _count: { select: { expenses: { where: { isDeleted: false } } } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+  }
+
   async findOne(groupId: string, userId: string) {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },

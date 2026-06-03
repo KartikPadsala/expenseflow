@@ -19,6 +19,7 @@ import { RecurringModule } from './recurring/recurring.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './mail/mail.module';
 import { StorageModule } from './storage/storage.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { StorageModule } from './storage/storage.module';
     AnalyticsModule,
     ExchangeRatesModule,
     RecurringModule,
+    SearchModule,
   ],
 })
 export class AppModule {}

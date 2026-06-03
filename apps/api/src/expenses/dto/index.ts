@@ -77,7 +77,7 @@ export class ListExpensesDto {
   @IsString()
   groupId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Search in description and notes' })
   @IsOptional()
   @IsString()
   search?: string;
@@ -86,6 +86,11 @@ export class ListExpensesDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by payer user ID' })
+  @IsOptional()
+  @IsString()
+  paidById?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -96,6 +101,16 @@ export class ListExpensesDto {
   @IsOptional()
   @IsDateString()
   toDate?: string;
+
+  @ApiPropertyOptional({ description: 'Minimum expense amount' })
+  @IsOptional()
+  @Type(() => Number)
+  minAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Maximum expense amount' })
+  @IsOptional()
+  @Type(() => Number)
+  maxAmount?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

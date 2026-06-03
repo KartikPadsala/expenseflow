@@ -1,7 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 
-export function useExpenses(params?: { groupId?: string; page?: number; limit?: number; search?: string }) {
+export interface ExpenseFilters {
+  groupId?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+  categoryId?: string;
+  fromDate?: string;
+  toDate?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  paidById?: string;
+}
+
+export function useExpenses(params?: ExpenseFilters) {
   return useQuery({
     queryKey: ['expenses', params],
     queryFn: async () => {

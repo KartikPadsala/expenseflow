@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Receipt, HandCoins, PieChart,
-  Bell, Settings, LogOut, Wallet, RefreshCw,
+  Bell, Settings, LogOut, Wallet, RefreshCw, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLogout } from '@/hooks/use-auth';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/search', label: 'Search', icon: Search },
   { href: '/groups', label: 'Groups', icon: Users },
   { href: '/expenses', label: 'Expenses', icon: Receipt },
   { href: '/settlements', label: 'Settlements', icon: HandCoins },
