@@ -17,12 +17,13 @@ import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X, Plus, Minus, ChevronDown, Check } from 'lucide-react-native';
+import { X, Plus, Minus, ChevronDown, Check, ScanLine } from 'lucide-react-native';
 import { useCreateExpense } from '../../../hooks/use-expenses';
 import { useGroups, useGroup } from '../../../hooks/use-groups';
 import { useCategories } from '../../../hooks/use-categories';
 import { useFriends } from '../../../hooks/use-friends';
 import { useAuthStore } from '../../../store/auth.store';
+import { useScanReceipt } from '../../../hooks/use-ocr';
 import {
   getSplitAmounts,
   validatePercentagesSum,
@@ -71,6 +72,7 @@ export default function NewExpenseScreen() {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<DetailsForm>({
     resolver: zodResolver(detailsSchema),
@@ -108,6 +110,48 @@ export default function NewExpenseScreen() {
   const categories = useCategories();
   const friends = useFriends();
   const { mutate: createExpense, isPending } = useCreateExpense();
+  const scanReceipt = useScanReceipt();
+
+  function applyOcrResult(result: import('@expenseflow/shared').OcrResult) {
+    if (result.merchant) setValue('description', result.merchant);
+    if (result.total) setValue('amount', String(result.total));
+    if (result.currency && result.currency.length === 3) setValue('currency', result.currency);
+    if (result.date) setValue('date', result.date.slice(0, 10));
+  }
+
+  function handleScanReceipt() {
+    Alert.alert('Scan Receipt', 'Choose a source', [
+      {
+        text: 'Camera',
+        onPress: () => scanReceipt.mutate({ source: 'camera' }, {
+          onSuccess: (result) => {
+            applyOcrResult(result);
+            Alert.alert('Receipt scanned', 'Form fields have been pre-filled. Please review before saving.');
+          },
+          onError: (err) => {
+            if (err.message !== 'No image selected') {
+              Alert.alert('Scan failed', err.message);
+            }
+          },
+        }),
+      },
+      {
+        text: 'Photo Library',
+        onPress: () => scanReceipt.mutate({ source: 'gallery' }, {
+          onSuccess: (result) => {
+            applyOcrResult(result);
+            Alert.alert('Receipt scanned', 'Form fields have been pre-filled. Please review before saving.');
+          },
+          onError: (err) => {
+            if (err.message !== 'No image selected') {
+              Alert.alert('Scan failed', err.message);
+            }
+          },
+        }),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
 
   const availablePeople: Participant[] = useMemo(() => {
     if (selectedGroupId && group.data?.members) {
@@ -241,7 +285,9 @@ export default function NewExpenseScreen() {
           <X size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Expense</Text>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity onPress={handleScanReceipt} disabled={scanReceipt.isPending}>
+          <ScanLine size={22} color={scanReceipt.isPending ? '#9ca3af' : '#6366f1'} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>

@@ -12,13 +12,18 @@ export class OcrService {
   constructor(private configService: ConfigService) {
     const providerName = this.configService.get('OCR_PROVIDER') || 'openai';
     switch (providerName) {
-      case 'google': this.provider = new GoogleOcrProvider(); break;
-      case 'azure': this.provider = new AzureOcrProvider(); break;
+      case 'google': this.provider = new GoogleOcrProvider(configService); break;
+      case 'azure': this.provider = new AzureOcrProvider(configService); break;
       default: this.provider = new OpenAiOcrProvider(configService);
     }
   }
 
   async scan(imageBuffer: Buffer, mimeType: string) {
     return this.provider.scan(imageBuffer, mimeType);
+  }
+
+  /** Expose provider name for testing/logging */
+  getProviderName(): string {
+    return this.configService.get('OCR_PROVIDER') ?? 'openai';
   }
 }

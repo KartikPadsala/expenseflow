@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useCreateExpense } from '@/hooks/use-expenses';
 import { useGroups, useGroup } from '@/hooks/use-groups';
 import { useAuthStore } from '@/store/auth.store';
+import { useScanReceipt } from '@/hooks/use-ocr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ArrowLeft, Calculator } from 'lucide-react';
+import { ArrowLeft, Calculator, ScanLine, Loader2 } from 'lucide-react';
 
 const SPLIT_METHODS = ['EQUAL', 'UNEQUAL', 'PERCENTAGE', 'SHARES'] as const;
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'INR', 'JPY', 'SGD', 'CHF', 'HKD'];
@@ -89,6 +90,7 @@ export default function NewExpensePage() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
   const createExpense = useCreateExpense();
+  const scanReceipt = useScanReceipt();
   const { data: groups } = useGroups();
 
   const defaultGroupId = searchParams.get('groupId') ?? '';
@@ -98,8 +100,9 @@ export default function NewExpensePage() {
   const [participants, setParticipants] = useState<Participant[]>([
     { userId: user?.id ?? '', displayName: user?.displayName ?? 'You' },
   ]);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
-  const { control, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { description: '', amount: '', currency: 'USD', date: todayISO(), splitMethod: 'EQUAL', notes: '' },
   });
@@ -158,12 +161,65 @@ export default function NewExpensePage() {
     });
   }
 
+  function handleReceiptFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrError(null);
+    scanReceipt.mutate(file, {
+      onSuccess: (result) => {
+        if (result.merchant) setValue('description', result.merchant);
+        if (result.total) setValue('amount', String(result.total));
+        if (result.currency?.length === 3) setValue('currency', result.currency);
+        if (result.date) setValue('date', result.date.slice(0, 10));
+      },
+      onError: (err) => setOcrError(err.message),
+    });
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
         <h1 className="text-2xl font-bold">Add Expense</h1>
+        <div className="ml-auto">
+          <label htmlFor="receipt-upload" className="cursor-pointer">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={scanReceipt.isPending}
+              asChild
+            >
+              <span>
+                {scanReceipt.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Scanning…</>
+                  : <><ScanLine className="h-4 w-4" /> Scan Receipt</>
+                }
+              </span>
+            </Button>
+            <input
+              id="receipt-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              className="sr-only"
+              onChange={handleReceiptFile}
+            />
+          </label>
+        </div>
       </div>
+      {ocrError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-2 text-sm text-destructive">
+          {ocrError}
+        </div>
+      )}
+      {scanReceipt.isSuccess && (
+        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">
+          Receipt scanned — fields pre-filled. Please review before saving.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>

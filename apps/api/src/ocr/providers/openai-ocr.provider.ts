@@ -10,34 +10,38 @@ export class OpenAiOcrProvider implements OcrProvider {
   private client: OpenAI;
 
   constructor(private configService: ConfigService) {
-    this.client = new OpenAI({ apiKey: this.configService.get('OPENAI_API_KEY') });
+    const apiKey = this.configService.get<string>('OPENAI_API_KEY') || 'not-configured';
+    this.client = new OpenAI({ apiKey });
   }
 
   async scan(imageBuffer: Buffer, mimeType: string): Promise<OcrResult> {
     const base64 = imageBuffer.toString('base64');
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-vision-preview',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Extract receipt data from this image. Return a JSON object with: merchant (string), date (ISO string), total (number), tax (number), currency (string, e.g. USD), items (array of {description, amount, quantity}). Return only valid JSON.',
-            },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-    });
-
-    const content = response.choices[0]?.message?.content || '{}';
     try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-vision-preview',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Extract receipt data from this image. Return a JSON object with: merchant (string), date (ISO string), total (number), tax (number), currency (string, e.g. USD), items (array of {description, amount, quantity}). Return only valid JSON.',
+              },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      });
+
+      const content = response.choices[0]?.message?.content || '';
+      if (!content) return { items: [] };
+
       const match = content.match(/\{[\s\S]*\}/);
-      return match ? JSON.parse(match[0]) : { items: [] };
-    } catch {
-      this.logger.error('Failed to parse OCR response', content);
+      const parsed = match ? JSON.parse(match[0]) : null;
+      return parsed ? { items: [], ...parsed } : { items: [] };
+    } catch (err: any) {
+      this.logger.error('Failed to process OCR response', err?.message);
       return { items: [] };
     }
   }
