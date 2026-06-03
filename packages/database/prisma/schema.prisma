@@ -266,7 +266,7 @@ model Settlement {
   createdAt DateTime         @default(now())
   settledAt DateTime?
 
-  group Group?  @relation(fields: [groupId], references: [id])
+  group Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   payer User   @relation("SettlementPayer", fields: [payerId], references: [id])
   payee User   @relation("SettlementPayee", fields: [payeeId], references: [id])
 
