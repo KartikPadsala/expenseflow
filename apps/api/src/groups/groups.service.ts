@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, ForbiddenException, ConflictException,
+  Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGroupDto, UpdateGroupDto, AddMemberDto, UpdateMemberRoleDto } from './dto';
@@ -174,9 +174,28 @@ export class GroupsService {
       }
     }
 
-    // Subtract completed settlements from the debt graph so balances reflect actual payments
+    // Collect all member IDs so we can also find group-less settlements between members
+    const groupMembers = await this.prisma.groupMember.findMany({
+      where: { groupId },
+      include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+    });
+    const memberIds = groupMembers.map((m) => m.userId);
+
+    // Subtract completed settlements from the debt graph so balances reflect actual payments.
+    // Include settlements that reference this group directly OR settlements between any two group
+    // members that have no groupId (personal payments that still clear group debts).
     const completedSettlements = await this.prisma.settlement.findMany({
-      where: { groupId, status: 'COMPLETED' },
+      where: {
+        status: 'COMPLETED',
+        OR: [
+          { groupId },
+          {
+            groupId: null,
+            payerId: { in: memberIds },
+            payeeId: { in: memberIds },
+          },
+        ],
+      },
     });
 
     for (const s of completedSettlements) {
@@ -191,19 +210,30 @@ export class GroupsService {
         paid = convertedAmount;
       }
 
-      // Reduce payer→payee debt
+      // Reduce payer→payee debt first
       const directDebt = balanceMap.get(s.payerId)?.get(s.payeeId) ?? 0;
       if (directDebt > 0) {
-        const remaining = Math.max(0, directDebt - paid);
-        balanceMap.get(s.payerId)!.set(s.payeeId, remaining);
-        paid = Math.max(0, paid - directDebt); // excess after covering direct debt
+        const absorbed = Math.min(directDebt, paid);
+        balanceMap.get(s.payerId)!.set(s.payeeId, directDebt - absorbed);
+        paid = paid - absorbed;
       }
 
-      // Any excess reduces the reverse debt (payee owed payer)
+      // Any remaining reduces the reverse debt (payee owed payer)
       if (paid > 0.01) {
         const reverseDebt = balanceMap.get(s.payeeId)?.get(s.payerId) ?? 0;
+        if (reverseDebt > 0) {
+          const absorbed = Math.min(reverseDebt, paid);
+          ensureEntry(s.payeeId, s.payerId);
+          balanceMap.get(s.payeeId)!.set(s.payerId, reverseDebt - absorbed);
+          paid = paid - absorbed;
+        }
+      }
+
+      // True overpayment: payer is now owed money — create a credit in reverse direction
+      if (paid > 0.01) {
         ensureEntry(s.payeeId, s.payerId);
-        balanceMap.get(s.payeeId)!.set(s.payerId, Math.max(0, reverseDebt - paid));
+        const existingCredit = balanceMap.get(s.payeeId)!.get(s.payerId)!;
+        balanceMap.get(s.payeeId)!.set(s.payerId, existingCredit + paid);
       }
     }
 
@@ -237,11 +267,7 @@ export class GroupsService {
       memberNetMap.set(tx.to, (memberNetMap.get(tx.to) ?? 0) + tx.amount);
     }
 
-    const groupMembers = await this.prisma.groupMember.findMany({
-      where: { groupId },
-      include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
-    });
-
+    // groupMembers was already fetched above — reuse it here
     const balances = groupMembers.map((m) => ({
       userId: m.userId,
       displayName: m.user.displayName,
