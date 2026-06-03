@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, FlatList,
 } from 'react-native';
@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { X, ChevronDown, Check } from 'lucide-react-native';
 import { useCreateSettlement } from '../../../hooks/use-settlements';
 import { useFriends } from '../../../hooks/use-friends';
-import { useGroups } from '../../../hooks/use-groups';
+import { useGroups, useGroup } from '../../../hooks/use-groups';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Avatar } from '../../../components/ui/Avatar';
@@ -35,10 +35,20 @@ export default function NewSettlementScreen() {
   const createSettlement = useCreateSettlement();
   const { data: friendsData } = useFriends();
   const { data: groups } = useGroups();
+  const { data: groupData } = useGroup(params.groupId ?? '');
 
-  const friends: Friend[] = (friendsData?.friends ?? []).map((f: any) => ({
-    id: f.id, displayName: f.displayName, avatarUrl: f.avatarUrl, email: f.email,
-  }));
+  // Merge friends + group members (deduped by id) for the payee picker
+  const friends: Friend[] = useMemo(() => {
+    const fromFriends = (friendsData?.friends ?? []).map((f: any) => ({
+      id: f.id, displayName: f.displayName, avatarUrl: f.avatarUrl, email: f.email,
+    }));
+    if (!groupData?.members) return fromFriends;
+    const idSet = new Set(fromFriends.map((f) => f.id));
+    const fromGroup = (groupData.members as any[])
+      .filter((m) => m.user && !idSet.has(m.user.id))
+      .map((m) => ({ id: m.user.id, displayName: m.user.displayName, avatarUrl: m.user.avatarUrl, email: m.user.email ?? '' }));
+    return [...fromFriends, ...fromGroup];
+  }, [friendsData, groupData]);
 
   const [selectedPayee, setSelectedPayee] = useState<Friend | null>(
     params.payeeId ? { id: params.payeeId, displayName: params.payeeName ?? '', avatarUrl: undefined, email: '' } : null,

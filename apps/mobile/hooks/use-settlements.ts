@@ -41,6 +41,24 @@ export interface CreateSettlementInput {
   notes?: string;
 }
 
+export interface SettlementStats {
+  totalOwed: number;
+  totalOwing: number;
+  pendingCount: number;
+  completedCount: number;
+  cancelledCount: number;
+}
+
+export function useSettlementStats() {
+  return useQuery<SettlementStats>({
+    queryKey: ['settlements', 'stats'],
+    queryFn: async () => {
+      const { data } = await api.get('/settlements/stats');
+      return data.data ?? data;
+    },
+  });
+}
+
 export function useSettlements(params?: { groupId?: string; status?: string }) {
   return useQuery<Settlement[]>({
     queryKey: ['settlements', params],

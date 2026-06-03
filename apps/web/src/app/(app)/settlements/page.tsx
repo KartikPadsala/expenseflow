@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { useSettlements } from '@/hooks/use-settlements';
+import { useSettlements, useSettlementStats } from '@/hooks/use-settlements';
 import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@expenseflow/shared';
-import { Plus, ArrowUpRight, ArrowDownLeft, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownLeft, TrendingDown, TrendingUp } from 'lucide-react';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -26,6 +26,7 @@ export default function SettlementsPage() {
   const { user } = useAuthStore();
   const [statusFilter, setStatusFilter] = useState('');
   const { data: settlements, isLoading } = useSettlements(statusFilter ? { status: statusFilter } : undefined);
+  const { data: stats } = useSettlementStats();
 
   return (
     <div className="space-y-6">
@@ -38,6 +39,38 @@ export default function SettlementsPage() {
           <Button><Plus className="h-4 w-4 mr-2" />Record Settlement</Button>
         </Link>
       </div>
+
+      {/* Stats summary */}
+      {stats && (stats.totalOwed > 0 || stats.totalOwing > 0) && (
+        <div className="grid grid-cols-2 gap-4">
+          {stats.totalOwed > 0 && (
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <TrendingDown className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">You owe (pending)</p>
+                  <p className="text-lg font-bold text-red-600">{formatCurrency(stats.totalOwed, 'USD')}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {stats.totalOwing > 0 && (
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-green-50 flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">You're owed (pending)</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(stats.totalOwing, 'USD')}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Status filter tabs */}
       <div className="flex gap-2 border-b">

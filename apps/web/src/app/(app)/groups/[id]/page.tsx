@@ -1,6 +1,7 @@
 'use client';
 import { useGroup, useGroupBalances } from '@/hooks/use-groups';
 import { useExpenses } from '@/hooks/use-expenses';
+import { useSettlements } from '@/hooks/use-settlements';
 import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExpenseCard } from '@/components/expenses/expense-card';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SettleAllButton } from '@/components/settlements/settle-all-button';
 import Link from 'next/link';
-import { Plus, Users, ArrowRight, HandCoins, Pencil } from 'lucide-react';
+import { Plus, Users, ArrowRight, HandCoins, Pencil, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '@expenseflow/shared';
 
 export default function GroupDetailPage({ params }: { params: { id: string } }) {
@@ -16,6 +17,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
   const { data: group } = useGroup(params.id);
   const { data: expenses } = useExpenses({ groupId: params.id });
   const { data: balances } = useGroupBalances(params.id);
+  const { data: groupSettlements } = useSettlements({ groupId: params.id, status: 'COMPLETED' });
 
   if (!group) return <div className="text-muted-foreground animate-pulse">Loading...</div>;
 
@@ -96,6 +98,44 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
           </div>
         </CardContent>
       </Card>
+
+      {groupSettlements && groupSettlements.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2"><CheckCircle className="h-5 w-5 text-green-600" />Settlement History ({groupSettlements.length})</CardTitle>
+              <Link href={`/settlements?groupId=${params.id}&status=COMPLETED`}>
+                <Button variant="ghost" size="sm" className="text-xs">View all</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {groupSettlements.slice(0, 5).map((s) => {
+                const isPayer = s.payerId === user?.id;
+                return (
+                  <Link key={s.id} href={`/settlements/${s.id}`}>
+                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer">
+                      <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${isPayer ? 'bg-red-500' : 'bg-green-500'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">
+                          {isPayer ? `You paid ${s.payee?.displayName}` : `${s.payer?.displayName} paid you`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.settledAt ? new Date(s.settledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                        </p>
+                      </div>
+                      <span className={`text-sm font-semibold ${isPayer ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(s.amount, s.currency)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

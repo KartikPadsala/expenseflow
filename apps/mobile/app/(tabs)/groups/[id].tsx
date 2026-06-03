@@ -17,7 +17,7 @@ import { ArrowLeft, TrendingDown, TrendingUp, HandCoins, Settings, Users } from 
 import { useGroup, useGroupBalances } from '../../../hooks/use-groups';
 import { useExpenses } from '../../../hooks/use-expenses';
 import { useAuthStore } from '../../../store/auth.store';
-import { useBulkSettle } from '../../../hooks/use-settlements';
+import { useBulkSettle, useSettlements } from '../../../hooks/use-settlements';
 import { Card } from '../../../components/ui/Card';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Badge } from '../../../components/ui/Badge';
@@ -43,6 +43,7 @@ export default function GroupDetailScreen() {
   const balances = useGroupBalances(id);
   const expenses = useExpenses({ groupId: id, limit: 20 });
   const bulkSettle = useBulkSettle();
+  const groupSettlements = useSettlements({ groupId: id, status: 'COMPLETED' });
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [settleModalOpen, setSettleModalOpen] = useState(false);
@@ -67,6 +68,7 @@ export default function GroupDetailScreen() {
   const simplified = balances.data?.simplified ?? [];
   const allBalances = balances.data?.balances ?? [];
   const groupExpenses = expenses.data?.data ?? [];
+  const completedSettlements = groupSettlements.data ?? [];
 
   const myBalance = allBalances.find((b: any) => b.userId === user?.id);
   const myDebts = simplified.filter((s: any) => s.from === user?.id);
@@ -105,7 +107,7 @@ export default function GroupDetailScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.settleUpBtn}
-          onPress={() => router.push('/settlements/new')}
+          onPress={() => router.push({ pathname: '/settlements/new', params: { groupId: id, currency } })}
         >
           <HandCoins size={16} color="#6366f1" />
           <Text style={styles.settleUpText}>Settle Up</Text>
@@ -243,6 +245,45 @@ export default function GroupDetailScreen() {
             ))
           )}
         </View>
+
+        {/* Settlement History */}
+        {completedSettlements.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Settlement History ({completedSettlements.length})</Text>
+              <TouchableOpacity onPress={() => router.push({ pathname: '/settlements', params: {} })}>
+                <Text style={styles.manageLink}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            {completedSettlements.slice(0, 5).map((s: any) => {
+              const isPayer = s.payerId === user?.id;
+              return (
+                <TouchableOpacity key={s.id} onPress={() => router.push(`/settlements/${s.id}`)}>
+                  <Card style={styles.settlementHistoryCard}>
+                    <View style={styles.settlementHistoryRow}>
+                      <View style={[styles.directionDot, isPayer ? styles.dotRed : styles.dotGreen]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.settlementHistoryTitle}>
+                          {isPayer
+                            ? `You paid ${s.payee?.displayName ?? 'someone'}`
+                            : `${s.payer?.displayName ?? 'Someone'} paid you`}
+                        </Text>
+                        <Text style={styles.settlementHistoryDate}>
+                          {s.settledAt
+                            ? new Date(s.settledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : ''}
+                        </Text>
+                      </View>
+                      <Text style={[styles.settlementHistoryAmt, isPayer ? styles.amtRed : styles.amtGreen]}>
+                        {formatCurrency(s.amount, s.currency ?? currency)}
+                      </Text>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       {/* Settle All Modal */}
@@ -334,6 +375,16 @@ const styles = StyleSheet.create({
   settleAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   settleAllText: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
   manageLink: { fontSize: 13, fontWeight: '600', color: '#6366f1' },
+  settlementHistoryCard: { marginBottom: 6, padding: 12 },
+  settlementHistoryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  directionDot: { width: 10, height: 10, borderRadius: 5 },
+  dotRed: { backgroundColor: '#dc2626' },
+  dotGreen: { backgroundColor: '#16a34a' },
+  settlementHistoryTitle: { fontSize: 13, fontWeight: '600', color: '#111827' },
+  settlementHistoryDate: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
+  settlementHistoryAmt: { fontSize: 14, fontWeight: '700' },
+  amtRed: { color: '#dc2626' },
+  amtGreen: { color: '#16a34a' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },

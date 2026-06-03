@@ -4,8 +4,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Plus, CheckCircle, Clock, XCircle, ArrowUpRight, ArrowDownLeft } from 'lucide-react-native';
-import { useSettlements } from '../../../hooks/use-settlements';
+import { Plus, CheckCircle, Clock, XCircle, ArrowUpRight, ArrowDownLeft, TrendingUp, TrendingDown } from 'lucide-react-native';
+import { useSettlements, useSettlementStats } from '../../../hooks/use-settlements';
 import { useAuthStore } from '../../../store/auth.store';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
@@ -37,6 +37,7 @@ export default function SettlementsScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useSettlements(
     statusFilter !== 'ALL' ? { status: statusFilter } : undefined,
   );
+  const { data: stats } = useSettlementStats();
 
   const settlements = data ?? [];
 
@@ -49,6 +50,30 @@ export default function SettlementsScreen() {
           <Plus size={20} color="#fff" />
         </TouchableOpacity>
       </View>
+
+      {/* Stats summary */}
+      {stats && (stats.totalOwed > 0 || stats.totalOwing > 0) && (
+        <View style={styles.statsRow}>
+          {stats.totalOwed > 0 && (
+            <View style={[styles.statCard, styles.statRed]}>
+              <TrendingDown size={16} color="#dc2626" />
+              <View>
+                <Text style={styles.statLabel}>You owe</Text>
+                <Text style={[styles.statAmount, styles.amtRed]}>{formatCurrency(stats.totalOwed)}</Text>
+              </View>
+            </View>
+          )}
+          {stats.totalOwing > 0 && (
+            <View style={[styles.statCard, styles.statGreen]}>
+              <TrendingUp size={16} color="#16a34a" />
+              <View>
+                <Text style={styles.statLabel}>You're owed</Text>
+                <Text style={[styles.statAmount, styles.amtGreen]}>{formatCurrency(stats.totalOwing)}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Status filters */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
@@ -127,6 +152,14 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   title: { fontSize: 22, fontWeight: '700', color: '#111827' },
   newBtn: { backgroundColor: '#6366f1', borderRadius: 20, padding: 8 },
+  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  statCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, padding: 10 },
+  statRed: { backgroundColor: '#fff5f5' },
+  statGreen: { backgroundColor: '#f0fdf4' },
+  statLabel: { fontSize: 11, color: '#6b7280' },
+  statAmount: { fontSize: 15, fontWeight: '700', marginTop: 1 },
+  amtRed: { color: '#dc2626' },
+  amtGreen: { color: '#16a34a' },
   filtersRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, flexDirection: 'row' },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
   filterChipActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
@@ -141,6 +174,4 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 12, color: '#6b7280' },
   cardRight: { alignItems: 'flex-end', gap: 4 },
   cardAmount: { fontSize: 15, fontWeight: '700' },
-  amtRed: { color: '#dc2626' },
-  amtGreen: { color: '#16a34a' },
 });
