@@ -22,6 +22,11 @@ export class SettlementsController {
     return this.settlementsService.create(user.id, dto);
   }
 
+  @Get('stats')
+  getStats(@CurrentUser() user: { id: string }) {
+    return this.settlementsService.getStats(user.id);
+  }
+
   @Get()
   @ApiQuery({ name: 'groupId', required: false })
   @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED', 'CANCELLED'] })

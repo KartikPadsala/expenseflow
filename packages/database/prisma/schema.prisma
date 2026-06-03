@@ -262,9 +262,10 @@ model Settlement {
   currency  String           @default("USD")
   method    PaymentMethod    @default(CASH)
   status    SettlementStatus @default(PENDING)
-  notes     String?
-  createdAt DateTime         @default(now())
-  settledAt DateTime?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  settledAt   DateTime?
+  cancelledAt DateTime?
 
   group Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   payer User   @relation("SettlementPayer", fields: [payerId], references: [id], onDelete: Restrict)

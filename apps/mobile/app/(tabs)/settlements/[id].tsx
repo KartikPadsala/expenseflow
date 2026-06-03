@@ -179,7 +179,7 @@ export default function SettlementDetailScreen() {
             {settlement.status === 'CANCELLED' && (
               <TimelineEvent
                 label="Settlement cancelled"
-                date={settlement.createdAt}
+                date={settlement.cancelledAt ?? settlement.createdAt}
                 color="#dc2626"
                 isLast
               />

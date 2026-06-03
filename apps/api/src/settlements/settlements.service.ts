@@ -126,6 +126,30 @@ export class SettlementsService {
     return settlement;
   }
 
+  async getStats(userId: string) {
+    const [totalOwed, totalOwing, pendingCount, completedCount, cancelledCount] = await Promise.all([
+      this.prisma.settlement.aggregate({
+        where: { payerId: userId, status: 'PENDING' },
+        _sum: { amount: true },
+      }),
+      this.prisma.settlement.aggregate({
+        where: { payeeId: userId, status: 'PENDING' },
+        _sum: { amount: true },
+      }),
+      this.prisma.settlement.count({ where: { OR: [{ payerId: userId }, { payeeId: userId }], status: 'PENDING' } }),
+      this.prisma.settlement.count({ where: { OR: [{ payerId: userId }, { payeeId: userId }], status: 'COMPLETED' } }),
+      this.prisma.settlement.count({ where: { OR: [{ payerId: userId }, { payeeId: userId }], status: 'CANCELLED' } }),
+    ]);
+
+    return {
+      totalOwed: Number(totalOwed._sum.amount ?? 0),
+      totalOwing: Number(totalOwing._sum.amount ?? 0),
+      pendingCount,
+      completedCount,
+      cancelledCount,
+    };
+  }
+
   async findAll(userId: string, groupId?: string, status?: string) {
     const where: any = {
       OR: [{ payerId: userId }, { payeeId: userId }],
@@ -194,6 +218,6 @@ export class SettlementsService {
     if (settlement.payerId !== userId && settlement.payeeId !== userId) throw new ForbiddenException();
     if (settlement.status === 'CANCELLED') throw new ConflictException('Settlement is already cancelled');
     if (settlement.status === 'COMPLETED') throw new ConflictException('Cannot cancel a completed settlement');
-    return this.prisma.settlement.update({ where: { id: settlementId }, data: { status: 'CANCELLED' } });
+    return this.prisma.settlement.update({ where: { id: settlementId }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
   }
 }

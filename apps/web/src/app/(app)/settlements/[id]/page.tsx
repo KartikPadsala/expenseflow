@@ -49,7 +49,15 @@ export default function SettlementDetailPage({ params }: { params: { id: string 
   const cancel = useCancelSettlement();
 
   if (isLoading) return <div className="animate-pulse h-64 bg-muted rounded-lg" />;
-  if (!s) return <div className="text-center py-20 text-muted-foreground">Settlement not found.</div>;
+  if (!s) return (
+    <div className="text-center py-20">
+      <XCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+      <p className="text-muted-foreground">Settlement not found.</p>
+      <button onClick={() => router.push('/settlements')} className="mt-4 text-primary underline text-sm">
+        Back to Settlements
+      </button>
+    </div>
+  );
 
   const isPayer = s.payerId === user?.id;
   const isPayee = s.payeeId === user?.id;
@@ -130,7 +138,7 @@ export default function SettlementDetailPage({ params }: { params: { id: string 
             <TimelineEvent label="Marked as completed" date={s.settledAt} color="bg-green-500" isLast />
           )}
           {s.status === 'CANCELLED' && (
-            <TimelineEvent label="Settlement cancelled" date={s.createdAt} color="bg-red-500" isLast />
+            <TimelineEvent label="Settlement cancelled" date={s.cancelledAt ?? s.createdAt} color="bg-red-500" isLast />
           )}
         </CardContent>
       </Card>

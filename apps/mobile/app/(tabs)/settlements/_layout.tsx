@@ -6,6 +6,7 @@ export default function SettlementsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" />
       <Stack.Screen name="new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="success" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

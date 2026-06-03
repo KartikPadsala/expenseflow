@@ -26,6 +26,7 @@ export interface Settlement {
   groupId?: string | null;
   createdAt: string;
   settledAt?: string | null;
+  cancelledAt?: string | null;
   payer?: SettlementUser;
   payee?: SettlementUser;
   group?: SettlementGroup;
@@ -82,9 +83,14 @@ export function useCompleteSettlement() {
       const { data } = await api.patch(`/settlements/${id}/complete`);
       return (data.data ?? data) as Settlement;
     },
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: ['settlements', id] });
+    onSuccess: (settlement) => {
+      qc.invalidateQueries({ queryKey: ['settlements', settlement.id] });
       qc.invalidateQueries({ queryKey: ['settlements'] });
+      if (settlement.groupId) {
+        qc.invalidateQueries({ queryKey: ['groups', settlement.groupId, 'balances'] });
+        qc.invalidateQueries({ queryKey: ['groups', settlement.groupId] });
+      }
+      qc.invalidateQueries({ queryKey: ['groups'] });
     },
   });
 }
@@ -96,9 +102,14 @@ export function useCancelSettlement() {
       const { data } = await api.patch(`/settlements/${id}/cancel`);
       return (data.data ?? data) as Settlement;
     },
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: ['settlements', id] });
+    onSuccess: (settlement) => {
+      qc.invalidateQueries({ queryKey: ['settlements', settlement.id] });
       qc.invalidateQueries({ queryKey: ['settlements'] });
+      if (settlement.groupId) {
+        qc.invalidateQueries({ queryKey: ['groups', settlement.groupId, 'balances'] });
+        qc.invalidateQueries({ queryKey: ['groups', settlement.groupId] });
+      }
+      qc.invalidateQueries({ queryKey: ['groups'] });
     },
   });
 }

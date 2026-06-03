@@ -67,7 +67,17 @@ export default function NewSettlementScreen() {
       groupId: selectedGroupId,
       notes: data.notes || undefined,
     }, {
-      onSuccess: () => { router.dismiss(); },
+      onSuccess: (settlement) => {
+        router.replace({
+          pathname: '/(tabs)/settlements/success',
+          params: {
+            settlementId: settlement.id,
+            payeeName: selectedPayee.displayName,
+            amount: String(settlement.amount),
+            currency: settlement.currency,
+          },
+        });
+      },
       onError: (e: any) => Alert.alert('Error', e?.response?.data?.message ?? 'Failed to create settlement'),
     });
   }

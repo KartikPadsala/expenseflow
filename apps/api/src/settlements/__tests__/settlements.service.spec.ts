@@ -157,19 +157,28 @@ describe('SettlementsService', () => {
     it('allows payer to cancel a PENDING settlement', async () => {
       const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
       mockPrisma.settlement.findUnique.mockResolvedValue(s);
-      mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED' });
+      mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED', cancelledAt: new Date() });
       await service.cancel('s1', 'u1');
       expect(mockPrisma.settlement.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: 'CANCELLED' } })
+        expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELLED', cancelledAt: expect.any(Date) }) })
       );
     });
 
     it('allows payee to cancel a PENDING settlement', async () => {
       const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
       mockPrisma.settlement.findUnique.mockResolvedValue(s);
-      mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED' });
+      mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED', cancelledAt: new Date() });
       await service.cancel('s1', 'u2');
       expect(mockPrisma.settlement.update).toHaveBeenCalled();
+    });
+
+    it('sets cancelledAt timestamp on cancel', async () => {
+      const s = { id: 's1', payerId: 'u1', payeeId: 'u2', status: 'PENDING' };
+      mockPrisma.settlement.findUnique.mockResolvedValue(s);
+      mockPrisma.settlement.update.mockResolvedValue({ ...s, status: 'CANCELLED', cancelledAt: new Date() });
+      await service.cancel('s1', 'u1');
+      const updateCall = mockPrisma.settlement.update.mock.calls[0][0];
+      expect(updateCall.data.cancelledAt).toBeInstanceOf(Date);
     });
 
     it('throws ForbiddenException for unrelated user', async () => {
@@ -231,6 +240,41 @@ describe('SettlementsService', () => {
       });
       expect(Array.isArray(result)).toBe(true);
       expect(result[0]).toEqual(created);
+    });
+  });
+
+  describe('getStats', () => {
+    beforeEach(() => {
+      (mockPrisma.settlement as any).aggregate = jest.fn();
+      (mockPrisma.settlement as any).count = jest.fn();
+    });
+
+    it('returns totals and counts for current user', async () => {
+      (mockPrisma.settlement as any).aggregate
+        .mockResolvedValueOnce({ _sum: { amount: 100 } })  // totalOwed
+        .mockResolvedValueOnce({ _sum: { amount: 50 } });  // totalOwing
+      (mockPrisma.settlement as any).count
+        .mockResolvedValueOnce(3)   // pendingCount
+        .mockResolvedValueOnce(10)  // completedCount
+        .mockResolvedValueOnce(2);  // cancelledCount
+
+      const stats = await service.getStats('u1');
+
+      expect(stats).toEqual({ totalOwed: 100, totalOwing: 50, pendingCount: 3, completedCount: 10, cancelledCount: 2 });
+    });
+
+    it('returns zeros when user has no settlements', async () => {
+      (mockPrisma.settlement as any).aggregate
+        .mockResolvedValueOnce({ _sum: { amount: null } })
+        .mockResolvedValueOnce({ _sum: { amount: null } });
+      (mockPrisma.settlement as any).count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0);
+
+      const stats = await service.getStats('u1');
+
+      expect(stats).toEqual({ totalOwed: 0, totalOwing: 0, pendingCount: 0, completedCount: 0, cancelledCount: 0 });
     });
   });
 });
