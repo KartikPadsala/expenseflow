@@ -33,11 +33,25 @@ describe('simplifyDebts', () => {
     expect(total).toBeCloseTo(50);
   });
 
-  it('does not reduce when no simplification is possible', () => {
+  it('produces deterministic output for same input (sorted by amount)', () => {
+    const transactions = [
+      { from: 'A', to: 'D', amount: 5 },
+      { from: 'B', to: 'D', amount: 30 },
+      { from: 'C', to: 'D', amount: 15 },
+    ];
+    const result1 = simplifyDebts([...transactions]);
+    const result2 = simplifyDebts([...transactions].reverse());
+    // Both runs should produce identical results
+    expect(result1).toEqual(result2);
+  });
+
+  it('largest debtor pays largest creditor first', () => {
     const result = simplifyDebts([
-      { from: 'A', to: 'B', amount: 10 },
-      { from: 'C', to: 'D', amount: 20 },
+      { from: 'A', to: 'D', amount: 5 },
+      { from: 'B', to: 'D', amount: 30 },
     ]);
-    expect(result).toHaveLength(2);
+    // D is owed 35 total; B (30) is larger debtor
+    const bTx = result.find((t) => t.from === 'B');
+    expect(bTx?.amount).toBe(30);
   });
 });

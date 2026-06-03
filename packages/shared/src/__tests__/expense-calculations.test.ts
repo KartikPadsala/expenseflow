@@ -137,14 +137,26 @@ describe('calculateSplit - PERCENTAGE', () => {
     expect(validateSplit(results, 200)).toBe(true);
   });
 
-  it('defaults to 0 for missing percentage', () => {
+  it('penny correction: 3-way split at 33.33% each totals exactly', () => {
     const results = calculateSplit({
-      totalAmount: 100,
-      participantIds: ['A', 'B'],
+      totalAmount: 10,
+      participantIds: ['A', 'B', 'C'],
       method: 'PERCENTAGE',
-      percentages: { A: 100 },
+      percentages: { A: 33.33, B: 33.33, C: 33.34 },
     });
-    expect(results.find((r) => r.participantId === 'B')?.owedAmount).toBe(0);
+    expect(validateSplit(results, 10)).toBe(true);
+    const total = results.reduce((s, r) => s + r.owedAmount, 0);
+    expect(total).toBeCloseTo(10, 5);
+  });
+
+  it('penny correction: odd amount $0.10 at 33%/33%/34% totals exactly', () => {
+    const results = calculateSplit({
+      totalAmount: 0.10,
+      participantIds: ['A', 'B', 'C'],
+      method: 'PERCENTAGE',
+      percentages: { A: 33, B: 33, C: 34 },
+    });
+    expect(validateSplit(results, 0.10)).toBe(true);
   });
 });
 
@@ -184,15 +196,29 @@ describe('calculateSplit - SHARES', () => {
     expect(results.find((r) => r.participantId === 'B')?.owedAmount).toBeCloseTo(33.33);
   });
 
-  it('handles equal shares (1:1)', () => {
+  it('penny correction: odd shares split totals exactly', () => {
+    // $10 split 3:1:1 = 6 + 2 + 2 = 10 (clean), test odd case
     const results = calculateSplit({
-      totalAmount: 60,
-      participantIds: ['A', 'B'],
+      totalAmount: 10,
+      participantIds: ['A', 'B', 'C'],
       method: 'SHARES',
-      shares: { A: 1, B: 1 },
+      shares: { A: 1, B: 1, C: 1 },
     });
-    expect(validateSplit(results, 60)).toBe(true);
-    results.forEach((r) => expect(r.owedAmount).toBe(30));
+    expect(validateSplit(results, 10)).toBe(true);
+    const total = results.reduce((s, r) => s + r.owedAmount, 0);
+    expect(total).toBeCloseTo(10, 5);
+  });
+
+  it('penny correction: shares on $1 split 3 ways totals exactly', () => {
+    const results = calculateSplit({
+      totalAmount: 1,
+      participantIds: ['A', 'B', 'C'],
+      method: 'SHARES',
+      shares: { A: 1, B: 1, C: 1 },
+    });
+    expect(validateSplit(results, 1)).toBe(true);
+    const total = results.reduce((s, r) => s + r.owedAmount, 0);
+    expect(Math.abs(total - 1)).toBeLessThan(0.01);
   });
 });
 

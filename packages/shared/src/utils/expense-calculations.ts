@@ -49,17 +49,21 @@ export function calculateSplit(input: SplitInput): SplitResult[] {
 
     case 'PERCENTAGE': {
       const percentages = input.percentages ?? {};
-      return participantIds.map((id) => ({
+      const results = participantIds.map((id) => ({
         participantId: id,
         owedAmount: roundCurrency((totalAmount * (percentages[id] ?? 0)) / 100),
         sharePercent: percentages[id] ?? 0,
       }));
+      // Penny correction: adjust last participant so total is exact
+      const pctSum = results.reduce((s, r) => s + r.owedAmount, 0);
+      results[n - 1].owedAmount = roundCurrency(totalAmount - pctSum + results[n - 1].owedAmount);
+      return results;
     }
 
     case 'SHARES': {
       const sharesMap = input.shares ?? {};
       const totalShares = participantIds.reduce((s, id) => s + (sharesMap[id] ?? 1), 0);
-      return participantIds.map((id) => {
+      const results = participantIds.map((id) => {
         const share = sharesMap[id] ?? 1;
         return {
           participantId: id,
@@ -68,6 +72,10 @@ export function calculateSplit(input: SplitInput): SplitResult[] {
           shares: share,
         };
       });
+      // Penny correction: adjust last participant so total is exact
+      const sharesSum = results.reduce((s, r) => s + r.owedAmount, 0);
+      results[n - 1].owedAmount = roundCurrency(totalAmount - sharesSum + results[n - 1].owedAmount);
+      return results;
     }
 
     case 'MULTI_PAYER': {

@@ -19,6 +19,7 @@ export function simplifyDebts(transactions: DebtTransaction[]): DebtTransaction[
   }
 
   // Step 2: Separate creditors (positive) and debtors (negative)
+  // Sort descending for deterministic output regardless of Map insertion order
   const creditors: Balance[] = [];
   const debtors: Balance[] = [];
 
@@ -29,6 +30,9 @@ export function simplifyDebts(transactions: DebtTransaction[]): DebtTransaction[
       debtors.push({ userId, amount: -amount }); // store as positive
     }
   }
+
+  creditors.sort((a, b) => b.amount - a.amount);
+  debtors.sort((a, b) => b.amount - a.amount);
 
   // Step 3: Greedy matching
   const result: DebtTransaction[] = [];
